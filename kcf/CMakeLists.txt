@@ -1,0 +1,1 @@
+add_library(kcf fhog.cpp kcftracker.cpp)

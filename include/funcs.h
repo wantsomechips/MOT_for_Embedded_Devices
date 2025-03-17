@@ -1,11 +1,11 @@
+#pragma once
+
 #ifndef _FUNCS_H_
 #define _FUNCS_H_
 
-#include <stdio.h>
+#include <iostream>
 
-#include <cstdint>
-
-
+using std::cin, std::cout, std::endl;
 
 namespace funcs{
 
