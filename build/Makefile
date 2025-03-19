@@ -126,7 +126,7 @@ funcs: cmake_check_build_system
 
 # fast build rule for target.
 funcs/fast:
-	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/funcs.dir/build.make src/CMakeFiles/funcs.dir/build
+	$(MAKE) $(MAKESILENT) -f kcf/CMakeFiles/funcs.dir/build.make kcf/CMakeFiles/funcs.dir/build
 .PHONY : funcs/fast
 
 #=============================================================================
@@ -139,8 +139,21 @@ main: cmake_check_build_system
 
 # fast build rule for target.
 main/fast:
-	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/main.dir/build.make src/CMakeFiles/main.dir/build
+	$(MAKE) $(MAKESILENT) -f kcf/CMakeFiles/main.dir/build.make kcf/CMakeFiles/main.dir/build
 .PHONY : main/fast
+
+#=============================================================================
+# Target rules for targets named fd
+
+# Build rule for target.
+fd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fd
+.PHONY : fd
+
+# fast build rule for target.
+fd/fast:
+	$(MAKE) $(MAKESILENT) -f fd/CMakeFiles/fd.dir/build.make fd/CMakeFiles/fd.dir/build
+.PHONY : fd/fast
 
 # Help Target
 help:
@@ -150,6 +163,7 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... fd"
 	@echo "... funcs"
 	@echo "... main"
 .PHONY : help

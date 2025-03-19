@@ -39,7 +39,12 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/gaohao/Desktop/MOT/build/src/cmake_install.cmake")
+  include("/Users/gaohao/Desktop/MOT/build/kcf/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("/Users/gaohao/Desktop/MOT/build/fd/cmake_install.cmake")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT)

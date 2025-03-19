@@ -14,9 +14,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 find_package(OpenCV REQUIRED)
 
-include_directories(./include ./kcf ${OpenCV_INCLUDE_DIRS})
+include_directories(${OpenCV_INCLUDE_DIRS} ./fd ./src ./kcf)
 
 add_subdirectory(./src ./kcf)
+add_subdirectory(./fd)
 
 
 
