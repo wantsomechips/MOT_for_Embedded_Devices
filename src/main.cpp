@@ -21,7 +21,18 @@ using std::string;
 #define imExt ".jpg"
 
 
+void test_fd();
+
 int main(void){
+    
+    test_fd();
+
+
+    return 0;
+
+}
+
+void test_fd(void){
     string path = string("../") + NAME + "/" +  imDir + "/";
 
     for (int i = 1; i <= seqLength; ++i){
@@ -59,19 +70,9 @@ int main(void){
         
         cv::imshow(string("Test Set: ") + NAME,f);
 
-
-
-
         /* Press `ESC` to quit. */
         if (cv::waitKey(1000 / frameRate) == 27){
             break;
         }
-
     }
-
-
-    return 0;
-
 }
-
-
