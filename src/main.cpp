@@ -21,18 +21,18 @@ using std::string;
 #define imExt ".jpg"
 
 
-void test_fd();
+void testing();
 
 int main(void){
     
-    test_fd();
+    testing();
 
 
     return 0;
 
 }
 
-void test_fd(void){
+void testing(void){
     string path = string("../") + NAME + "/" +  imDir + "/";
 
     for (int i = 1; i <= seqLength; ++i){
@@ -50,7 +50,7 @@ void test_fd(void){
         }
 
         Mat cur_f, pre_f, pp_f, resp;
-        if (i > 3){
+        if (i >= 3){
             cur_f = f;
 
             snprintf(file_name,sizeof(file_name),(string("%06d") + imExt).c_str(),i-1);
@@ -63,8 +63,30 @@ void test_fd(void){
 
             vector<Rect> objects = fd::getRects(resp);
 
+            /* Init KCF */
+            if(i == 3){
+                
+                func::tcrs_init(tcrs);
+
+                for(const Rect& object:objects){
+                    if(tcr_count >= MAX_TCR){
+                        cout << "WARNING: MAX_TCR Reached !" << endl;
+                        break;
+                    }
+                    tcrs[tcr_count].init(cur_f, object);
+                    ++ tcr_count;
+
+                }
+            }
+            else{
+                for(int i = 0; i < tcr_count; ++i){
+                    tcrs[i].update(f);
+                }
+            }
+
             for(const Rect& object:objects){
-                cv::rectangle(f,object,cv::Scalar(0,0,255));
+                /* Blue(FD). */
+                cv::rectangle(f,object,cv::Scalar(255,0,0));
             }
         }
         

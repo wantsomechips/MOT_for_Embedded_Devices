@@ -67,10 +67,10 @@ FUNC NAME: getRects
 Process frames difference's response and return Rects of detected objects.
 
 # Arguments
-@ resp: Response of frames difference.
+@ resp:     Response of frames difference.
 
 # Returns
-@ objects: Vector of Rects(bounding boxes) of detected objects.
+@ objects:  Vector of Rects(bounding boxes) of detected objects.
 
 --- --- --- --- --- --- --- --- --- */
 
