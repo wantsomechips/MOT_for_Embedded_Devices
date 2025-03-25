@@ -2,19 +2,18 @@
 
 
 int tcr_count = 0;
-array<Tracking,MAX_TCR> tcrs;
 
-bool func::tcrs_init(array<Tracking,MAX_TCR>& tcrs){
+bool Tracking::set_id(int new_id){
+    _id = new_id;
+}
 
-    for(int i = 0; i < MAX_TCR; ++ i){
-        tcrs[i] = Tracking(i);
-    }
-    return true;
+int Tracking::id(void){
+    return _id;
 }
 
 bool Tracking::update(Mat& frame){
     Rect bbox;
-    bbox = kcf_p -> update(frame);
+    bbox = _p_kcf -> update(frame);
 
     char title[6];
     snprintf(title, sizeof(title), "id:%02d", id);
@@ -30,10 +29,9 @@ bool Tracking::update(Mat& frame){
 bool Tracking::init(Mat first_f, Rect roi, bool hog, bool fixed_window,
                          bool multiscale, bool lab){
 
-    
     state = TCR_RUNN;
-    kcf_p = std::make_unique<KCFTracker>(hog, fixed_window, multiscale, lab);
-    kcf_p -> init(roi,first_f);
+    _p_kcf = new KCFTracker(hog, fixed_window, multiscale, lab);
+    _p_kcf -> init(roi,first_f);
 
     return true;
 }
@@ -50,7 +48,7 @@ Calculate IoU of two Rects.
 @ bbox_b:   Second bounding box;
 
 # Returns
-@ iou:      Intersection over union, 0.0 ~ 1.0;
+@ iou:      0.0 ~ 1.0，intersection over union;
 
 --- --- --- --- --- --- --- --- --- */
 double func::IoU(const Rect& bbox_a, const Rect& bbox_b){
@@ -61,6 +59,8 @@ double func::IoU(const Rect& bbox_a, const Rect& bbox_b){
     
     return iou;
 }
+
+
 
 
 
