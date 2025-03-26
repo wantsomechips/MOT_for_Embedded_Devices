@@ -16,7 +16,7 @@ find_package(OpenCV REQUIRED)
 
 include_directories(${OpenCV_INCLUDE_DIRS} ./fd ./src ./kcf)
 
-add_subdirectory(./fd)
+add_subdirectory(./ObjectDetect)
 add_subdirectory(./kcf)
 add_subdirectory(./src)
 

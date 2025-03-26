@@ -15,8 +15,20 @@ using std::vector;
 #include <array>
 using std::array;
 
+#include <string>
+using std::string;
+
 using std::cin, std::cout, std::endl;
 using cv::Mat, cv::Rect, cv::Point, cv::Size;
+
+/* seqinfo.ini of test set. */
+#define NAME "PETS09-S2L1"
+#define imDir "img1"
+#define frameRate 7
+#define seqLength 795
+#define imWidth 768
+#define imHeight 576
+#define imExt ".jpg"
 
 /* Minmum IoU requirement. */
 #define MIN_IOU_REQ (0.7)
@@ -39,10 +51,8 @@ class Tracking;
 namespace func{
 
     double IoU(const Rect& bbox_a, const Rect& bbox_b);
+    bool MOT(string input);
 }
-
-extern int tcr_count;
-
 
 
 class Tracking{
@@ -52,8 +62,9 @@ public:
     /* 8 bit. */
     char state;
 
-    Tracking():_id(-1) {}
-    Tracking(int id):_id(id){
+    Tracking():_id(-1), _min_iou_req(-1) {}
+    Tracking(int id, int min_iou_req = MIN_IOU_REQ)
+                :_id(id), _min_iou_req(min_iou_req){
         state = TCR_INIT;
     }
     ~ Tracking(){
@@ -68,10 +79,13 @@ public:
 
     bool set_id(int new_id);
     int id(void);
+    bool isSameObject(const Rect& bbox);
 
 protected:
     int _id;
     KCFTracker* _p_kcf = nullptr;
+    Rect _roi;
+    int _min_iou_req;
 
 };
 
@@ -97,11 +111,15 @@ public:
         }
     }
 
+    bool tick(Mat& frame, vector<fdObject> fd_objs = {});
+    bool tcrFullHandler(void);
+
     const int max_tcr;
 
 protected:
 
     Tracking* _p_tcrs = nullptr;
+    int _tcr_count = 0;
 
 };
 

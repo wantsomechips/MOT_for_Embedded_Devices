@@ -4,10 +4,12 @@
 #define _FRAMES_DIFFERENCE_H_
 
 #include "funcs.hpp"
-#include <vector>
 
+#include <vector>
 using std::vector;
 
+#include <tuple>
+using std::tuple;
 
 /* Frame Difference threshold. */
 #define FD_THRESHOLD (100)
@@ -17,13 +19,11 @@ using std::vector;
 #define DETEC_INTV (5)
 
 /* Miminum frames number requirement for detection. */
-#define MIN_DETEC_FRM_REQ ( DETEC_INTV / 2 + 1)
+#define MIN_DETEC_FRM_REQ ( DETEC_INTV / 2 )
 
 /* Expand ratio for detected result. */
 #define DETEC_EXPD_RATIO (1.2)
 
-
-#define IOU_THRESHOLD (0.6)
 
 class fdObject;
 class objectDetect;
@@ -37,13 +37,13 @@ namespace fd{
 class fdObject{
 
 public:
-    vector<Rect> rects;
-    Rect result;
 
-    fdObject(){}
-    fdObject(const Rect& bbox){
+    fdObject():_min_iou_req(-1),_min_frm_req(-1){}
+
+    fdObject(const Rect& bbox, int min_iou_req = MIN_IOU_REQ, int min_frm_req = MIN_DETEC_FRM_REQ):
+                _min_iou_req(min_iou_req), _min_frm_req(min_frm_req){
         /* Deep Copy. */
-        rects.push_back(bbox);
+        _rects.push_back(bbox);
     }
 
     bool isSameObject(const Rect& bbox);
@@ -52,7 +52,18 @@ public:
 
     bool getResult(void);
 
+    Rect getRect(void);
+
+protected:
+    Rect _result;
+
+    vector<Rect> _rects;
+
+    int _min_iou_req;
+    int _min_frm_req;
+
 };
+
 
 class objDetect{
 
@@ -72,10 +83,10 @@ public:
     }
 
     bool tick(const Mat& frame);
+    vector<fdObject> getObjects(void);
 
-    Mat threeFramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra);
-    vector<Rect> getRects(Mat resp);
-    vector<tuple>
+    static Mat threeFramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra);
+    static vector<Rect> getRects(Mat resp);
 
 protected:
     vector<fdObject> _objs;

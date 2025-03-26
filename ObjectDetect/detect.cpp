@@ -17,33 +17,35 @@ CONS:
 
 --- --- --- --- --- --- --- --- --- */
 
-#include "fd.hpp"
+#include "detect.hpp"
 #include <opencv2/opencv.hpp>
 
 
 bool fdObject::isSameObject(const Rect& bbox){
-    Rect newest = rects.back();
+
+    Rect newest = _rects.back();
     double iou = func::IoU(newest,bbox);
 
-    return (iou > IOU_THRESHOLD);
+    return (iou > _min_iou_req);
 }
 
 bool fdObject::addFrame(const Rect& bbox){
-    rects.push_back(bbox);
+
+    _rects.push_back(bbox);
     return true;
 }
 
 bool fdObject::getResult(void){
 
     /* Detection failed. */
-    if (rects.size() < MIN_DETEC_FRM_REQ){
+    if (_rects.size() < MIN_DETEC_FRM_REQ){
         return false;
     }
 
     /* Merge rects. */
-    Rect merged = rects[0];
-    for (int i = 1; i < rects.size(); ++i) {
-        merged |= rects[i];
+    Rect merged = _rects[0];
+    for (int i = 1; i < _rects.size(); ++i) {
+        merged |= _rects[i];
     }
 
 
@@ -54,11 +56,16 @@ bool fdObject::getResult(void){
 
     // expanded &= Rect(0, 0, imgSize.width, imgSize.height);
     
-    result = merged;
+    _result = merged;
     
 
     return true;
 
+}
+
+Rect fdObject::getRect(void){
+
+    return _result;
 }
 
 
@@ -66,6 +73,13 @@ bool fdObject::getResult(void){
 bool objDetect::tick(const Mat& frame){
 
     int round = _clock % _period;
+
+    if(_clock < (0xFFFFFFF5)){
+        _clock ++ ;
+    }
+    else{
+        _clock = 0;
+    }
 
     _p_frms[round] = frame;
 
@@ -97,26 +111,30 @@ bool objDetect::tick(const Mat& frame){
     else if(round == 0){
 
         if(_objs.size() != 0){
-            Vector
-            for(fdObject& obj: _objs){
-                if(obj.getResult()){
 
+            int i_write = 0;
+            for(int i_read = 0; i_read < _objs.size(); ++ i_read){
+
+                if(_objs[i_read].getResult()){
+                    _objs[i_write] = _objs[i_read];
+                    ++ i_write;
                 }
             }
+            _objs.resize(i_write);
+
+            if(_objs.size() != 0){
+                return true;
+            }
         }
-
     }
 
+    return false;
+}
 
 
-    if(_clock < (0xFFFFFFF5)){
-        _clock ++ ;
-    }
-    else{
-        _clock = 0;
-    }
+vector<fdObject> objDetect::getObjects(void){
 
-    return true;
+    return _objs;
 }
 
 
