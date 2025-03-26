@@ -39,7 +39,7 @@ bool func::MOT(string input){
             /* Only for testing object detection. */
             for(fdObject& fd_obj: fd_objs){
                 /* Blue(FD). */
-                cv::rectangle(frame,fd_obj.getRect(),cv::Scalar(255,0,0));
+                cv::rectangle(frame,fd_obj.resultRect(),cv::Scalar(255,0,0));
             }
         }
         else{
@@ -72,10 +72,11 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs = {}){
     if(_tcr_count == 0){
 
         for(fdObject& fd_obj: fd_objs){
-            _p_tcrs[_tcr_count].init(frame, fd_obj.getRect());
+            _p_tcrs[_tcr_count].init(frame, fd_obj.resultRect());
             ++ _tcr_count;
 
             if(_tcr_count >= max_tcr){
+
                 this -> tcrFullHandler();
             }
         }
@@ -89,6 +90,28 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs = {}){
     }
     else{
 
+        for(fdObject& fd_obj: fd_objs){
+
+            bool existed = false;
+            for(int i = 0; i < _tcr_count; ++ i){
+
+                bool existed = _p_tcrs[i].isSameObject(fd_obj.resultRect());
+
+                if(existed) {
+
+                    _p_tcrs[i].update(frame);
+                    break;
+                }
+            }
+
+            if(existed == false){
+                
+            }
+
+
+
+
+        }
 
     }
 

@@ -63,7 +63,7 @@ bool fdObject::getResult(void){
 
 }
 
-Rect fdObject::getRect(void){
+Rect fdObject::resultRect(void){
 
     return _result;
 }

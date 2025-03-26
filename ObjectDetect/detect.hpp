@@ -52,7 +52,7 @@ public:
 
     bool getResult(void);
 
-    Rect getRect(void);
+    Rect resultRect(void);
 
 protected:
     Rect _result;
