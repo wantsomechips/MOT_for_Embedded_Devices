@@ -1,0 +1,119 @@
+#include "funcs.hpp"
+#include "detect.hpp"
+#include "track.hpp"
+
+#include <cstdio>
+
+
+bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
+
+    if(_tcr_count == 0 && fd_objs.size() == 0){
+        return false;
+    }
+
+    // cout << "DEBUG:objTrack-tick - fd_objs.size: " << fd_objs.size() << endl;
+    // cout << "DEBUG:objTrack-tick - _tcr_count: " << _tcr_count << endl;
+
+    for(int i = 0; i < _tcr_count; ++ i){
+
+        _p_tcrs[i].update(frame);
+    }
+
+    int i_write = 0;
+    for(int i_read = 0; i_read < fd_objs.size(); ++ i_read){
+
+        Rect fd_rect = fd_objs[i_read].resultRect();
+
+        bool existed = false;
+        for(int i = 0; i < _tcr_count; ++ i){
+
+            existed = _p_tcrs[i].isSameObject(fd_rect);
+
+            if(existed) break;
+        }
+
+        if(existed == false){
+            fd_objs[i_write] = fd_objs[i_read];
+            ++ i_write;
+        }
+    }
+    fd_objs.resize(i_write);
+
+    for(fdObject& fd_obj: fd_objs){
+
+        _p_tcrs[_tcr_count].init(frame, fd_obj.resultRect());
+        ++ _tcr_count;
+
+        if(_tcr_count >= max_tcr){
+
+            this -> tcrFullHandler();
+        }
+    }
+
+    return true;
+
+}
+
+bool objTrack::tcrFullHandler(void){
+    /* To be done. */
+    bool tcr_full_handle = false;
+
+
+
+    if(tcr_full_handle == false){
+        std::cerr << "ERROR: Failed to handle tcrFullHandler" << endl;
+        return false;
+    }
+    return true;
+}
+
+bool Tracking::set_id(int new_id){
+    _id = new_id;
+    return true;
+}
+
+int Tracking::id(void){
+    return _id;
+}
+
+bool Tracking::isSameObject(const Rect& bbox){
+
+    double iou = func::IoU(_roi, bbox);
+
+    return (iou > _min_iou_req);
+}
+
+bool Tracking::update(Mat& frame){
+    Rect bbox;
+    bbox = _p_kcf -> update(frame);
+    _roi = bbox;
+
+    char title[6];
+    snprintf(title, sizeof(title), "id:%02d", _id);
+
+    cv::putText(frame, title, cv::Point(bbox.x,bbox.y-1),cv::FONT_HERSHEY_SIMPLEX,
+                         0.5, cv::Scalar(0,0,255), 1, cv::LINE_AA);
+    cv::rectangle(frame,bbox, cv::Scalar(0,0,255));
+
+    return true;
+}
+
+
+bool Tracking::init(Mat first_f, Rect roi, bool hog, bool fixed_window,
+                         bool multiscale, bool lab){
+
+    state = TCR_RUNN;
+    _roi = roi;
+    _p_kcf = new KCFTracker(hog, fixed_window, multiscale, lab);
+    _p_kcf -> init(roi,first_f);
+
+    return true;
+}
+
+
+
+
+
+
+
+

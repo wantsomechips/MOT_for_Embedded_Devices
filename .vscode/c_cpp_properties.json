@@ -4,7 +4,8 @@
             "name": "Mac",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/local/include/opencv4"
+                "/usr/local/include/opencv4",
+                "${workspaceFolder}/ObjectTrack"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",

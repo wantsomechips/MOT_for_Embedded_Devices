@@ -1,6 +1,6 @@
 #include "funcs.hpp"
 #include "detect.hpp"
-
+#include "track.hpp"
 
 bool func::MOT(string input){
 
@@ -20,8 +20,9 @@ bool func::MOT(string input){
     }
 
     if (!cap.isOpened()) {
+
         std::cerr << "ERRO: Failed to Open Input: " << input << std::endl;
-        return;
+        return false;
     }
 
     objDetect* detect = new objDetect(DETEC_INTV);
@@ -47,6 +48,8 @@ bool func::MOT(string input){
         }
 
         cv::imshow(string("Test Set: ") + NAME,frame);
+
+        cv::waitKey();
         
 
         /* Press `ESC` to quit. */
@@ -63,107 +66,7 @@ bool func::MOT(string input){
 
 }
 
-bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs = {}){
 
-    if(_tcr_count == 0 && fd_objs.size() == 0){
-        return false;
-    }
-
-    if(_tcr_count == 0){
-
-        for(fdObject& fd_obj: fd_objs){
-            _p_tcrs[_tcr_count].init(frame, fd_obj.resultRect());
-            ++ _tcr_count;
-
-            if(_tcr_count >= max_tcr){
-
-                this -> tcrFullHandler();
-            }
-        }
-    }
-    else if(fd_objs.size() == 0 ){
-
-        for(int i = 0; i < _tcr_count; ++ i){
-
-            _p_tcrs[i].update(frame);
-        }
-    }
-    else{
-
-        for(fdObject& fd_obj: fd_objs){
-
-            bool existed = false;
-            for(int i = 0; i < _tcr_count; ++ i){
-
-                bool existed = _p_tcrs[i].isSameObject(fd_obj.resultRect());
-
-                if(existed) {
-
-                    _p_tcrs[i].update(frame);
-                    break;
-                }
-            }
-
-            if(existed == false){
-                
-            }
-
-
-
-
-        }
-
-    }
-
-}
-
-bool objTrack::tcrFullHandler(void){
-    /* To be done. */
-    return false;
-}
-
-bool Tracking::set_id(int new_id){
-    _id = new_id;
-    return true;
-}
-
-int Tracking::id(void){
-    return _id;
-}
-
-bool Tracking::isSameObject(const Rect& bbox){
-
-    double iou = func::IoU(_roi, bbox);
-
-    return (iou > _min_iou_req);
-}
-
-bool Tracking::update(Mat& frame){
-    Rect bbox;
-    bbox = _p_kcf -> update(frame);
-    _roi = bbox;
-
-    char title[6];
-    snprintf(title, sizeof(title), "id:%02d", _id);
-
-    cv::putText(frame, title, cv::Point(bbox.x,bbox.y-1),cv::FONT_HERSHEY_SIMPLEX,
-                         0.5, cv::Scalar(0,0,255), 1, cv::LINE_AA);
-    cv::rectangle(frame,bbox, cv::Scalar(0,0,255));
-
-    return true;
-}
-
-
-bool Tracking::init(Mat first_f, Rect roi, bool hog, bool fixed_window,
-                         bool multiscale, bool lab){
-
-    state = TCR_RUNN;
-    _roi = roi;
-    _p_kcf = new KCFTracker(hog, fixed_window, multiscale, lab);
-    _p_kcf -> init(roi,first_f);
-
-    return true;
-}
 
 /* --- --- --- --- --- --- --- --- ---
 
@@ -185,6 +88,8 @@ double func::IoU(const Rect& bbox_a, const Rect& bbox_b){
     int inter_area = ( bbox_a & bbox_b).area();
 
     double iou = 1.0 * inter_area / (bbox_a.area() + bbox_b.area() - inter_area);
+
+    cout << "DEBUG::IoU: " << iou << endl;
     
     return iou;
 }

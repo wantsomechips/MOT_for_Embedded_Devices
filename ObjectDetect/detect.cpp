@@ -19,12 +19,15 @@ CONS:
 
 #include "detect.hpp"
 #include <opencv2/opencv.hpp>
+#include "funcs.hpp"
 
 
 bool fdObject::isSameObject(const Rect& bbox){
 
     Rect newest = _rects.back();
     double iou = func::IoU(newest,bbox);
+
+    cout << "DEBUG: fdObject::isSameObject - IOU: "<< iou <<endl;
 
     return (iou > _min_iou_req);
 }
@@ -48,15 +51,8 @@ bool fdObject::getResult(void){
         merged |= _rects[i];
     }
 
-
-    // Point center(merged.x + merged.width / 2, merged.y + merged.height / 2);
-    // Size newSize(merged.width * DETEC_EXPD_RATIO , merged.height * DETEC_EXPD_RATIO );
-
-    // Rect expanded(center.x - newSize.width / 2, center.y - newSize.height / 2, newSize.width, newSize.height);
-
-    // expanded &= Rect(0, 0, imgSize.width, imgSize.height);
-    
-    _result = merged;
+    // _result = merged;
+    _result = _rects.back();
     
 
     return true;
@@ -74,6 +70,9 @@ bool objDetect::tick(const Mat& frame){
 
     int round = _clock % _period;
 
+    cout << "DEBUG: objDetect::tick - round: "<< round <<endl;
+
+
     if(_clock < (0xFFFFFFF5)){
         _clock ++ ;
     }
@@ -81,14 +80,20 @@ bool objDetect::tick(const Mat& frame){
         _clock = 0;
     }
 
-    _p_frms[round] = frame;
+    /* Deep Copy. Otherwise it would be Shallow Copy. */
+    _p_frms[round] = frame.clone();
 
     if(round == 2){
         
         Mat resp = objDetect::threeFramesDiff(_p_frms[round], _p_frms[round-1], _p_frms[round-2]);
         vector<Rect> obj_rects = objDetect::getRects(resp);
 
+        cv::imshow("Resp", resp);
+
+        // cout << "DEBUG: objDetect::tick - obj_rects.size(): "<< obj_rects.size() <<endl;
+        
         for(const Rect& obj_rect: obj_rects){
+
             _objs.push_back(fdObject(obj_rect));
         }
     }
@@ -96,6 +101,8 @@ bool objDetect::tick(const Mat& frame){
 
         Mat resp = objDetect::threeFramesDiff(_p_frms[round], _p_frms[round-1], _p_frms[round-2]);
         vector<Rect> obj_rects = objDetect::getRects(resp);
+
+        cv::imshow("Resp", resp);
 
         for(const Rect& obj_rect: obj_rects){
 
@@ -108,7 +115,8 @@ bool objDetect::tick(const Mat& frame){
             }
         }
     }
-    else if(round == 0){
+
+    if(round == _period -1 ){
 
         if(_objs.size() != 0){
 
@@ -123,6 +131,7 @@ bool objDetect::tick(const Mat& frame){
             _objs.resize(i_write);
 
             if(_objs.size() != 0){
+                _res = std::move(_objs);
                 return true;
             }
         }
@@ -134,7 +143,7 @@ bool objDetect::tick(const Mat& frame){
 
 vector<fdObject> objDetect::getObjects(void){
 
-    return _objs;
+    return _res;
 }
 
 

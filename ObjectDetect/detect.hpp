@@ -8,21 +8,15 @@
 #include <vector>
 using std::vector;
 
-#include <tuple>
-using std::tuple;
-
 /* Frame Difference threshold. */
-#define FD_THRESHOLD (100)
+#define FD_THRESHOLD (45)
 #define MIN_BBOX_SIZE (500)
 
 /* Detect Objects every 5 frames. */
-#define DETEC_INTV (5)
+#define DETEC_INTV (3)
 
 /* Miminum frames number requirement for detection. */
 #define MIN_DETEC_FRM_REQ ( DETEC_INTV / 2 )
-
-/* Expand ratio for detected result. */
-#define DETEC_EXPD_RATIO (1.2)
 
 
 class fdObject;
@@ -40,7 +34,7 @@ public:
 
     fdObject():_min_iou_req(-1),_min_frm_req(-1){}
 
-    fdObject(const Rect& bbox, int min_iou_req = MIN_IOU_REQ, int min_frm_req = MIN_DETEC_FRM_REQ):
+    fdObject(const Rect& bbox, double min_iou_req = MIN_IOU_REQ, int min_frm_req = MIN_DETEC_FRM_REQ):
                 _min_iou_req(min_iou_req), _min_frm_req(min_frm_req){
         /* Deep Copy. */
         _rects.push_back(bbox);
@@ -59,7 +53,7 @@ protected:
 
     vector<Rect> _rects;
 
-    int _min_iou_req;
+    double _min_iou_req;
     int _min_frm_req;
 
 };
@@ -71,12 +65,18 @@ public:
 
     objDetect():_period(0) {}
 
-    objDetect(int period):_period(period){
+    objDetect(int period = DETEC_INTV):_period(period){
+
+        if(_period < 3){
+
+            throw std::runtime_error("ERR:Period must greater than 3");
+        }
 
         _p_frms = new Mat[period];
     }
 
     ~objDetect(){
+
         if(_p_frms != nullptr){
             delete[] _p_frms;
         }
@@ -90,6 +90,7 @@ public:
 
 protected:
     vector<fdObject> _objs;
+    vector<fdObject> _res;
     Mat * _p_frms = nullptr;
 
     const int _period;
