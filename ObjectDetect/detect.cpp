@@ -80,12 +80,16 @@ bool objDetect::tick(const Mat& frame){
         _clock = 0;
     }
 
+    /* 2 Frames Difference - frm_bound = 1;
+       3 Frames Difference - frm_bound = 2. */
+    int frm_bound = 1;
+
     /* Deep Copy. Otherwise it would be Shallow Copy. */
     _p_frms[round] = frame.clone();
 
-    if(round == 2){
+    if(round == frm_bound){
         
-        Mat resp = objDetect::threeFramesDiff(_p_frms[round], _p_frms[round-1], _p_frms[round-2]);
+        Mat resp = objDetect::FramesDiff(_p_frms[round], _p_frms[round-1]);
         vector<Rect> obj_rects = objDetect::getRects(resp);
 
         cv::imshow("Resp", resp);
@@ -97,9 +101,9 @@ bool objDetect::tick(const Mat& frame){
             _objs.push_back(fdObject(obj_rect));
         }
     }
-    else if(round > 2){
+    else if(round > frm_bound){
 
-        Mat resp = objDetect::threeFramesDiff(_p_frms[round], _p_frms[round-1], _p_frms[round-2]);
+        Mat resp = objDetect::FramesDiff(_p_frms[round], _p_frms[round-1]);
         vector<Rect> obj_rects = objDetect::getRects(resp);
 
         cv::imshow("Resp", resp);
@@ -152,33 +156,46 @@ vector<fdObject> objDetect::getObjects(void){
 FUNC NAME: threeFramesDiff
 
 # Description
-Calculate the response of three frames differences.
+Calculate the response of 2 or 3 frames difference.
 
 # Arguments
 @ cur_fra:  Current frame, frame `t`.
 @ pre_fra:  Previous frame, frame `t-1`.
-@ pp_fra:   Frame `t-2`.
+@ pp_fra:   Frame `t-2`. It's empty for 2 frames difference.
 
 # Returns
-@ res:      Response of three frames differences.
+@ res:      Response of frames differences.
 
 --- --- --- --- --- --- --- --- --- */
 
-Mat objDetect::threeFramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
+Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
 
-    Mat cur_g, pre_g, pp_g;
+    Mat cur_g, pre_g;
     cv::cvtColor(cur_fra, cur_g, cv::COLOR_BGR2GRAY);
     cv::cvtColor(pre_fra, pre_g, cv::COLOR_BGR2GRAY);
-    cv::cvtColor(pp_fra, pp_g, cv::COLOR_BGR2GRAY);
 
-    Mat cur_pre_d, pre_pp_d;
+    Mat cur_pre_d;
     cv::absdiff(cur_g, pre_g, cur_pre_d);
-    cv::absdiff(pre_g, pp_g, pre_pp_d);
 
-    Mat dd,res;
-    cv::bitwise_or(cur_pre_d, pre_pp_d, dd);
+    Mat res;
 
-    cv::threshold(dd, res,FD_THRESHOLD, 255, cv::THRESH_BINARY);
+    /* 2 Frames Difference. */
+    if(pp_fra.empty()){
+
+        cv::threshold(cur_pre_d, res,FD_THRESHOLD, 255, cv::THRESH_BINARY);
+    }
+    else{
+        Mat pp_g;
+        cv::cvtColor(pp_fra, pp_g, cv::COLOR_BGR2GRAY);
+
+        Mat pre_pp_d;
+        cv::absdiff(pre_g, pp_g, pre_pp_d);
+
+        Mat dd;
+        cv::bitwise_or(cur_pre_d, pre_pp_d, dd);
+
+        cv::threshold(dd, res,FD_THRESHOLD, 255, cv::THRESH_BINARY);
+    }
 
     return res;
 }

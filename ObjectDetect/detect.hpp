@@ -9,7 +9,7 @@
 using std::vector;
 
 /* Frame Difference threshold. */
-#define FD_THRESHOLD (45)
+#define FD_THRESHOLD (20)
 #define MIN_BBOX_SIZE (500)
 
 /* Detect Objects every 5 frames. */
@@ -85,7 +85,7 @@ public:
     bool tick(const Mat& frame);
     vector<fdObject> getObjects(void);
 
-    static Mat threeFramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra);
+    static Mat FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra = Mat());
     static vector<Rect> getRects(Mat resp);
 
 protected:
