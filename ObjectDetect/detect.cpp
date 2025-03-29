@@ -73,10 +73,10 @@ bool objDetect::tick(const Mat& frame){
     cout << "DEBUG: objDetect::tick - round: "<< round <<endl;
 
 
-    if(_clock < (0xFFFFFFF5)){
+    if(_clock < _clock_bound){
         _clock ++ ;
     }
-    else{
+    else {
         _clock = 0;
     }
 
@@ -92,8 +92,6 @@ bool objDetect::tick(const Mat& frame){
         Mat resp = objDetect::FramesDiff(_p_frms[round], _p_frms[round-1]);
         vector<Rect> obj_rects = objDetect::getRects(resp);
 
-        cv::imshow("Resp", resp);
-
         // cout << "DEBUG: objDetect::tick - obj_rects.size(): "<< obj_rects.size() <<endl;
         
         for(const Rect& obj_rect: obj_rects){
@@ -105,8 +103,6 @@ bool objDetect::tick(const Mat& frame){
 
         Mat resp = objDetect::FramesDiff(_p_frms[round], _p_frms[round-1]);
         vector<Rect> obj_rects = objDetect::getRects(resp);
-
-        cv::imshow("Resp", resp);
 
         for(const Rect& obj_rect: obj_rects){
 
@@ -153,7 +149,7 @@ vector<fdObject> objDetect::getObjects(void){
 
 /* --- --- --- --- --- --- --- --- ---
 
-FUNC NAME: threeFramesDiff
+FUNC NAME: FramesDiff
 
 # Description
 Calculate the response of 2 or 3 frames difference.
@@ -174,6 +170,9 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
     cv::cvtColor(cur_fra, cur_g, cv::COLOR_BGR2GRAY);
     cv::cvtColor(pre_fra, pre_g, cv::COLOR_BGR2GRAY);
 
+    cv::medianBlur(cur_g,cur_g, 5);
+    cv::medianBlur(pre_g,pre_g, 5);
+
     Mat cur_pre_d;
     cv::absdiff(cur_g, pre_g, cur_pre_d);
 
@@ -184,6 +183,7 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
 
         cv::threshold(cur_pre_d, res,FD_THRESHOLD, 255, cv::THRESH_BINARY);
     }
+    /* 3 Frames Difference. */
     else{
         Mat pp_g;
         cv::cvtColor(pp_fra, pp_g, cv::COLOR_BGR2GRAY);
@@ -196,6 +196,18 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
 
         cv::threshold(dd, res,FD_THRESHOLD, 255, cv::THRESH_BINARY);
     }
+
+    // cv::imshow("Resp", res);
+
+
+    // Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(7,7));
+
+    // cv::morphologyEx(res, res,cv::MORPH_CLOSE,kernel);
+
+    // kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE,cv::Size(7,7));
+
+    // cv::morphologyEx(res, res,cv::MORPH_DILATE,kernel);
+    
 
     return res;
 }
@@ -220,6 +232,11 @@ vector<Rect> objDetect::getRects(Mat resp) {
 
     vector<Rect> objects;
     vector<vector<cv::Point2i>> contours;
+
+    Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
+    cv::morphologyEx(resp, resp,cv::MORPH_CLOSE,kernel);
+
+    cv::imshow("CLOSE Resp", resp);
     
     cv:: findContours(resp, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 

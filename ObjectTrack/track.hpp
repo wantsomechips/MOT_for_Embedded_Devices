@@ -8,6 +8,23 @@
 #include "detect.hpp"
 #include "kcftracker.hpp"
 
+/* Tracker States. */
+/* Inited but not used yet. */
+#define TCR_INIT (0x01 << 1)
+/* Should be removed after object lost for a long while. */
+#define TCR_RMVD (0x01 << 2)
+/* Object lost. */
+#define TCR_LOST (0x01 << 3)
+/* It's correctly running. */
+#define TCR_RUNN (0x01 << 4)
+
+/* Sub-state of TCR_RUNN, represents how many detections needed 
+   to  confirm a newly detected object. */
+#define TCR_RUNN_3 (0x01 << 4 + 3)
+
+
+#define MAX_TCR 20
+
 class Tracking{
 
 public:
@@ -30,9 +47,10 @@ public:
     bool init(Mat first_f, Rect roi,bool hog = true, bool fixed_window = true, 
                                     bool multiscale = true, bool lab = true);
 
-    bool set_id(int new_id);
     int id(void);
     bool isSameObject(const Rect& bbox);
+    bool restart(Mat first_f, Rect roi,bool hog = true, bool fixed_window = true, 
+        bool multiscale = true, bool lab = true);
 
 protected:
     int _id;

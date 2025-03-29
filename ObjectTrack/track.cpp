@@ -29,7 +29,18 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
             existed = _p_tcrs[i].isSameObject(fd_rect);
 
-            if(existed) break;
+            if(existed) {
+                int state_xor = _p_tcrs[i].state ^ TCR_RUNN;
+                /* It's a sub-state of TCR_RUNN. */
+                if(state_xor < TCR_RUNN && state_xor != 0 ){
+
+                   -- _p_tcrs[i].state;
+
+
+                }
+
+                break;
+            }
         }
 
         if(existed == false){
@@ -67,11 +78,6 @@ bool objTrack::tcrFullHandler(void){
     return true;
 }
 
-bool Tracking::set_id(int new_id){
-    _id = new_id;
-    return true;
-}
-
 int Tracking::id(void){
     return _id;
 }
@@ -102,7 +108,7 @@ bool Tracking::update(Mat& frame){
 bool Tracking::init(Mat first_f, Rect roi, bool hog, bool fixed_window,
                          bool multiscale, bool lab){
 
-    state = TCR_RUNN;
+    state = TCR_RUNN_3;
     _roi = roi;
     _p_kcf = new KCFTracker(hog, fixed_window, multiscale, lab);
     _p_kcf -> init(roi,first_f);
@@ -110,6 +116,16 @@ bool Tracking::init(Mat first_f, Rect roi, bool hog, bool fixed_window,
     return true;
 }
 
+bool Tracking::restart(Mat first_f, Rect roi, bool hog, bool fixed_window,
+    bool multiscale, bool lab){
+
+    _roi = roi;
+    if(_p_kcf != nullptr) delete _p_kcf;
+    _p_kcf = new KCFTracker(hog, fixed_window, multiscale, lab);
+    _p_kcf -> init(roi,first_f);
+
+    return true;
+}
 
 
 

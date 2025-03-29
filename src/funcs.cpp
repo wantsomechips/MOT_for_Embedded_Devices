@@ -73,7 +73,8 @@ bool func::MOT(string input){
 FUNC NAME: IoU
 
 # Description
-Calculate IoU of two Rects.
+Calculate IoU of two Rects. The formula is modified in order to 
+merge the small fragments caused by occlusion.
 
 # Arguments
 @ bbox_a:   First bounding box;
@@ -87,7 +88,19 @@ double func::IoU(const Rect& bbox_a, const Rect& bbox_b){
 
     int inter_area = ( bbox_a & bbox_b).area();
 
+    double inter_area_ratio = 1.0 * inter_area / std::min(bbox_a.area(), bbox_b.area());
+
+    /* Believe that it's just a fragment caused by occlusion. */
+    if(inter_area_ratio > 0.8){
+
+        return 1.0;
+    }
+    
+
     double iou = 1.0 * inter_area / (bbox_a.area() + bbox_b.area() - inter_area);
+    
+    // double iou = 1.0 * inter_area / std::min(bbox_a.area(), bbox_b.area());
+
 
     cout << "DEBUG::IoU: " << iou << endl;
     

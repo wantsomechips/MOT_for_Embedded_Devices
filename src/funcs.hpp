@@ -29,20 +29,7 @@ using cv::Mat, cv::Rect, cv::Point, cv::Size;
 #define imExt ".jpg"
 
 /* Minmum IoU requirement. */
-#define MIN_IOU_REQ (0.6)
-
-/* Tracker States. */
-/* Inited but not used yet. */
-#define TCR_INIT (0x01 << 1)
-/* It's correctly running. */
-#define TCR_RUNN (0x01 << 2)
-/* Object lost. */
-#define TCR_LOST (0x01 << 3)
-/* Should be removed after object lost for a long while. */
-#define TCR_RMVD (0x01 << 4)
-
-
-#define MAX_TCR 20
+#define MIN_IOU_REQ (0.5)
 
 
 namespace func{

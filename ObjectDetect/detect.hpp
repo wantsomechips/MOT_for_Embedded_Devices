@@ -9,7 +9,7 @@
 using std::vector;
 
 /* Frame Difference threshold. */
-#define FD_THRESHOLD (20)
+#define FD_THRESHOLD (15)
 #define MIN_BBOX_SIZE (500)
 
 /* Detect Objects every 5 frames. */
@@ -67,6 +67,8 @@ public:
 
     objDetect(int period = DETEC_INTV):_period(period){
 
+        _clock_bound =  0xFFFFFFF0 + _period;
+        
         if(_period < 3){
 
             throw std::runtime_error("ERR:Period must greater than 3");
@@ -95,6 +97,7 @@ protected:
 
     const int _period;
     unsigned int  _clock = 0;
+    unsigned int _clock_bound = 0;
 
 };
 
