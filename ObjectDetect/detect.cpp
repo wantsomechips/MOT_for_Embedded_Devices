@@ -14,6 +14,8 @@ CONS:
 - Easily disturbed by noise(like tree leaves moving) and background 
   changes(like sudden brightness changes).
 
+THIS FILE USES TWO FRAMES DIFFERENCE.
+
 
 --- --- --- --- --- --- --- --- --- */
 
@@ -80,14 +82,11 @@ bool objDetect::tick(const Mat& frame){
         _clock = 0;
     }
 
-    /* 2 Frames Difference - frm_bound = 1;
-       3 Frames Difference - frm_bound = 2. */
-    int frm_bound = 1;
+    /* Use frame.clone() to Deep Copy. Otherwise it would be Shallow Copy. */
 
-    /* Deep Copy. Otherwise it would be Shallow Copy. */
-    _p_frms[round] = frame.clone();
+    cv::cvtColor(frame, _p_frms[round], cv::COLOR_BGR2GRAY);
 
-    if(round == frm_bound){
+    if(round == _frm_bound){
         
         Mat resp = objDetect::FramesDiff(_p_frms[round], _p_frms[round-1]);
         vector<Rect> obj_rects = objDetect::getRects(resp);
@@ -99,7 +98,7 @@ bool objDetect::tick(const Mat& frame){
             _objs.push_back(fdObject(obj_rect));
         }
     }
-    else if(round > frm_bound){
+    else if(round > _frm_bound){
 
         Mat resp = objDetect::FramesDiff(_p_frms[round], _p_frms[round-1]);
         vector<Rect> obj_rects = objDetect::getRects(resp);
@@ -130,6 +129,8 @@ bool objDetect::tick(const Mat& frame){
             }
             _objs.resize(i_write);
 
+            this -> backgrndUpdate(_p_frms[round]);
+
             if(_objs.size() != 0){
                 _res = std::move(_objs);
                 return true;
@@ -138,6 +139,50 @@ bool objDetect::tick(const Mat& frame){
     }
 
     return false;
+}
+
+bool objDetect::backgrndUpdate(const Mat& frame){
+
+    double alpha = 0.1;
+
+    Mat mask = Mat(frame.size(), CV_8UC1, cv::Scalar(255));
+
+    for(fdObject& obj:_objs){
+
+        cv::rectangle(mask, obj.resultRect(), cv::Scalar(0), cv::FILLED);
+    }
+
+    imshow("mask", mask);
+    
+    /* Can be accelerated by CPU Branch Prediction. */
+    if(_backgrnd_initialized == false){
+        
+        _backgrnd_init_counter --;
+        if(_backgrnd_init_counter == 0){
+
+            _backgrnd_initialized = true;
+        }
+
+        alpha = 0.5;
+
+        if(_backgrnd.empty()){
+
+            _backgrnd = Mat(frame.size(), CV_32FC1, cv::Scalar(0));
+        }
+
+    }
+
+    Mat frame_f;
+    frame.convertTo(frame_f, CV_32FC1);
+    Mat new_backgrnd = (1.0 - alpha) * _backgrnd + alpha * frame_f;
+    new_backgrnd.copyTo(_backgrnd, mask);
+
+    Mat tmp;
+    _backgrnd.convertTo(tmp, CV_8UC1);
+    imshow("Bakcgrnd", tmp);
+
+    return true;
+
 }
 
 
@@ -166,35 +211,49 @@ Calculate the response of 2 or 3 frames difference.
 
 Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
 
-    Mat cur_g, pre_g;
-    cv::cvtColor(cur_fra, cur_g, cv::COLOR_BGR2GRAY);
-    cv::cvtColor(pre_fra, pre_g, cv::COLOR_BGR2GRAY);
+    Mat cur_b, pre_b;
+    // cv::cvtColor(cur_fra, cur_g, cv::COLOR_BGR2GRAY);
+    // cv::cvtColor(pre_fra, pre_g, cv::COLOR_BGR2GRAY);
 
-    cv::medianBlur(cur_g,cur_g, 5);
-    cv::medianBlur(pre_g,pre_g, 5);
+    cv::medianBlur(cur_fra,cur_b, 5);
+    cv::medianBlur(pre_fra,pre_b, 5);
 
     Mat cur_pre_d;
-    cv::absdiff(cur_g, pre_g, cur_pre_d);
+    cv::absdiff(cur_b, pre_b, cur_pre_d);
 
-    Mat res;
+    Mat resp;
 
     /* 2 Frames Difference. */
-    if(pp_fra.empty()){
+    if(_frm_bound == 1){
 
-        cv::threshold(cur_pre_d, res,FD_THRESHOLD, 255, cv::THRESH_BINARY);
+        cv::threshold(cur_pre_d, resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
     }
     /* 3 Frames Difference. */
     else{
-        Mat pp_g;
-        cv::cvtColor(pp_fra, pp_g, cv::COLOR_BGR2GRAY);
 
         Mat pre_pp_d;
-        cv::absdiff(pre_g, pp_g, pre_pp_d);
+        cv::absdiff(pre_fra, pp_fra, pre_pp_d);
 
         Mat dd;
         cv::bitwise_or(cur_pre_d, pre_pp_d, dd);
 
-        cv::threshold(dd, res,FD_THRESHOLD, 255, cv::THRESH_BINARY);
+        cv::threshold(dd, resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
+    }
+
+    if(_backgrnd_initialized){
+
+        Mat res;
+
+        Mat backgrnd_i;
+        _backgrnd.convertTo(backgrnd_i, CV_8UC1);
+
+        Mat backgrnd_diff;
+        cv::absdiff(cur_fra, backgrnd_i, backgrnd_diff);
+        cv::threshold(backgrnd_diff, backgrnd_diff,BAKCGRND_THRESHOLD, 255, cv::THRESH_BINARY);
+
+        cv::bitwise_and(resp, backgrnd_diff, res);
+
+        return res;
     }
 
     // cv::imshow("Resp", res);
@@ -209,7 +268,7 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
     // cv::morphologyEx(res, res,cv::MORPH_DILATE,kernel);
     
 
-    return res;
+    return resp;
 }
 
 
@@ -233,10 +292,10 @@ vector<Rect> objDetect::getRects(Mat resp) {
     vector<Rect> objects;
     vector<vector<cv::Point2i>> contours;
 
-    Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-    cv::morphologyEx(resp, resp,cv::MORPH_CLOSE,kernel);
+    // Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
+    // cv::morphologyEx(resp, resp,cv::MORPH_CLOSE,kernel);
 
-    cv::imshow("CLOSE Resp", resp);
+    // cv::imshow("CLOSE Resp", resp);
     
     cv:: findContours(resp, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 

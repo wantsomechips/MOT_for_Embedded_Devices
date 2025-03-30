@@ -10,6 +10,7 @@ using std::vector;
 
 /* Frame Difference threshold. */
 #define FD_THRESHOLD (15)
+#define BAKCGRND_THRESHOLD (15)
 #define MIN_BBOX_SIZE (500)
 
 /* Detect Objects every 5 frames. */
@@ -87,13 +88,23 @@ public:
     bool tick(const Mat& frame);
     vector<fdObject> getObjects(void);
 
-    static Mat FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra = Mat());
-    static vector<Rect> getRects(Mat resp);
+    Mat FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra = Mat());
+    vector<Rect> getRects(Mat resp);
+    bool backgrndUpdate(const Mat& frame);
 
 protected:
     vector<fdObject> _objs;
     vector<fdObject> _res;
+    /* Pointers to binary images. */
     Mat * _p_frms = nullptr;
+
+    /* 2 Frames Difference - _frm_bound = 1;
+       3 Frames Difference - _frm_bound = 2. */
+    int _frm_bound = 1;
+
+    Mat _backgrnd = Mat();
+    bool _backgrnd_initialized = false;
+    int _backgrnd_init_counter = 7;
 
     const int _period;
     unsigned int  _clock = 0;
