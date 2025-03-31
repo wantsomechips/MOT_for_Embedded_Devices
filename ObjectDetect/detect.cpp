@@ -148,14 +148,28 @@ bool objDetect::backgrndUpdate(const Mat& frame){
 
     Mat mask = Mat(frame.size(), CV_8UC1, cv::Scalar(255));
 
+    Rect image_rect(Point(0,0),Size(frame.cols,frame.rows));
     for(fdObject& obj:_objs){
 
-        cv::rectangle(mask, obj.resultRect(), cv::Scalar(0), cv::FILLED);
+        Rect rec = obj.resultRect();
+        Point center = 0.5 * (rec.tl() + rec.br());
+        Size new_size(rec.width * _expand_ratio, rec.height * _expand_ratio);
+        Point new_tl (center.x - 0.5 * new_size.width, center.y - 0.5 * new_size.height);
+        Rect expanded_rect(new_tl, new_size);
+        expanded_rect = expanded_rect & image_rect;
+
+        cv::rectangle(mask, expanded_rect, cv::Scalar(0), cv::FILLED);
     }
 
     for(const Rect& rec: _tracked_ROIs){
 
-        cv::rectangle(mask, rec, cv::Scalar(0), cv::FILLED);
+        Point center = 0.5 * (rec.tl() + rec.br());
+        Size new_size(rec.width * _expand_ratio, rec.height * _expand_ratio);
+        Point new_tl (center.x - 0.5 * new_size.width, center.y - 0.5 * new_size.height);
+        Rect expanded_rect(new_tl, new_size);
+        expanded_rect = expanded_rect & image_rect;
+
+        cv::rectangle(mask, expanded_rect, cv::Scalar(0), cv::FILLED);
     }
     
     /* Can be accelerated by CPU Branch Prediction. */

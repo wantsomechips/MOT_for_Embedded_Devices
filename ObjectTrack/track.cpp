@@ -76,7 +76,7 @@ vector<Rect> objTrack::getROIs(void){
 bool objTrack::tcrFullHandler(void){
     /* To be done. */
     bool tcr_full_handle = false;
-
+    _tcr_count --;
 
 
     if(tcr_full_handle == false){

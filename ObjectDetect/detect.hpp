@@ -101,12 +101,17 @@ protected:
        3 Frames Difference - _frm_bound = 2. */
     int _frm_bound = 1;
 
+    /* CV_32FC1 background. */
     Mat _backgrnd = Mat();
+    /* CV_8UC1 background. */
     Mat _backgrnd_i = Mat();
     bool _backgrnd_initialized = false;
     int _backgrnd_init_counter = 5;
     double _alpha_init = 0.8;
-    double _alpha = 0.05;
+    double _alpha = 0.1;
+    /* Expand target Rects when calculating background mask.*/
+    double _expand_ratio = 1.2;
+    
 
     const int _period;
     unsigned int  _clock = 0;
