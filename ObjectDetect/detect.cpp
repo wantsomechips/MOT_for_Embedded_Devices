@@ -27,7 +27,7 @@ THIS FILE USES TWO FRAMES DIFFERENCE.
 bool fdObject::isSameObject(const Rect& bbox){
 
     Rect newest = _rects.back();
-    double iou = func::IoU(newest,bbox);
+    float iou = func::IoU(newest,bbox);
 
     cout << "DEBUG: fdObject::isSameObject - IOU: "<< iou <<endl;
 
@@ -144,7 +144,7 @@ bool objDetect::tick(const Mat& frame){
 
 bool objDetect::backgrndUpdate(const Mat& frame){
 
-    double alpha = _alpha;
+    float alpha = _alpha;
 
     Mat mask = Mat(frame.size(), CV_8UC1, cv::Scalar(255));
 

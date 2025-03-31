@@ -58,7 +58,7 @@ protected:
     int _id;
     KCFTracker* _p_kcf = nullptr;
     Rect _roi;
-    double _min_iou_req;
+    float _min_iou_req;
 
 };
 

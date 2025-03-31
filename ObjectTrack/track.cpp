@@ -92,7 +92,7 @@ int Tracking::id(void){
 
 bool Tracking::isSameObject(const Rect& bbox){
 
-    double iou = func::IoU(_roi, bbox);
+    float iou = func::IoU(_roi, bbox);
 
     return (iou > _min_iou_req);
 }

@@ -107,10 +107,10 @@ protected:
     Mat _backgrnd_i = Mat();
     bool _backgrnd_initialized = false;
     int _backgrnd_init_counter = 5;
-    double _alpha_init = 0.8;
-    double _alpha = 0.1;
+    float _alpha_init = 0.8;
+    float _alpha = 0.1;
     /* Expand target Rects when calculating background mask.*/
-    double _expand_ratio = 1.2;
+    float _expand_ratio = 1.2;
     
 
     const int _period;
