@@ -132,6 +132,7 @@ bool objDetect::tick(const Mat& frame){
             this -> backgrndUpdate(_p_frms[round]);
 
             if(_objs.size() != 0){
+                /* Get _objs prepared for next detection. */
                 _res = std::move(_objs);
                 return true;
             }
@@ -143,7 +144,7 @@ bool objDetect::tick(const Mat& frame){
 
 bool objDetect::backgrndUpdate(const Mat& frame){
 
-    double alpha = 0.1;
+    double alpha = _alpha;
 
     Mat mask = Mat(frame.size(), CV_8UC1, cv::Scalar(255));
 
@@ -152,7 +153,10 @@ bool objDetect::backgrndUpdate(const Mat& frame){
         cv::rectangle(mask, obj.resultRect(), cv::Scalar(0), cv::FILLED);
     }
 
-    imshow("mask", mask);
+    for(const Rect& rec: _tracked_ROIs){
+
+        cv::rectangle(mask, rec, cv::Scalar(0), cv::FILLED);
+    }
     
     /* Can be accelerated by CPU Branch Prediction. */
     if(_backgrnd_initialized == false){
@@ -163,7 +167,7 @@ bool objDetect::backgrndUpdate(const Mat& frame){
             _backgrnd_initialized = true;
         }
 
-        alpha = 0.5;
+        alpha = _alpha_init;
 
         if(_backgrnd.empty()){
 
@@ -174,12 +178,12 @@ bool objDetect::backgrndUpdate(const Mat& frame){
 
     Mat frame_f;
     frame.convertTo(frame_f, CV_32FC1);
+
     Mat new_backgrnd = (1.0 - alpha) * _backgrnd + alpha * frame_f;
     new_backgrnd.copyTo(_backgrnd, mask);
 
-    Mat tmp;
-    _backgrnd.convertTo(tmp, CV_8UC1);
-    imshow("Bakcgrnd", tmp);
+    _backgrnd.convertTo(_backgrnd_i, CV_8UC1);
+    imshow("Bakcgrnd", _backgrnd_i);
 
     return true;
 
@@ -189,6 +193,13 @@ bool objDetect::backgrndUpdate(const Mat& frame){
 vector<fdObject> objDetect::getObjects(void){
 
     return _res;
+}
+
+bool objDetect::addTrackedObjs(const vector<Rect>& rois){
+    
+    _tracked_ROIs = rois;
+
+    return true;
 }
 
 
@@ -221,7 +232,7 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
     Mat cur_pre_d;
     cv::absdiff(cur_b, pre_b, cur_pre_d);
 
-    Mat resp;
+    Mat resp,res;
 
     /* 2 Frames Difference. */
     if(_frm_bound == 1){
@@ -238,22 +249,26 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
         cv::bitwise_or(cur_pre_d, pre_pp_d, dd);
 
         cv::threshold(dd, resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
+
     }
+
+    imshow("Resp", resp);
 
     if(_backgrnd_initialized){
 
-        Mat res;
-
-        Mat backgrnd_i;
-        _backgrnd.convertTo(backgrnd_i, CV_8UC1);
-
         Mat backgrnd_diff;
-        cv::absdiff(cur_fra, backgrnd_i, backgrnd_diff);
+        cv::absdiff(cur_fra, _backgrnd_i, backgrnd_diff);
         cv::threshold(backgrnd_diff, backgrnd_diff,BAKCGRND_THRESHOLD, 255, cv::THRESH_BINARY);
 
         cv::bitwise_and(resp, backgrnd_diff, res);
 
-        return res;
+        imshow("Backgrnd Diff",backgrnd_diff);
+        // imshow("Res",res);
+
+    }
+    else{
+
+        res = resp;
     }
 
     // cv::imshow("Resp", res);
@@ -268,7 +283,7 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
     // cv::morphologyEx(res, res,cv::MORPH_DILATE,kernel);
     
 
-    return resp;
+    return res;
 }
 
 

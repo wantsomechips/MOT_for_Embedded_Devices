@@ -10,10 +10,10 @@ using std::vector;
 
 /* Frame Difference threshold. */
 #define FD_THRESHOLD (15)
-#define BAKCGRND_THRESHOLD (15)
+#define BAKCGRND_THRESHOLD (50)
 #define MIN_BBOX_SIZE (500)
 
-/* Detect Objects every 5 frames. */
+/* Detect Objects every DETEC_INTV frames. */
 #define DETEC_INTV (3)
 
 /* Miminum frames number requirement for detection. */
@@ -22,11 +22,6 @@ using std::vector;
 
 class fdObject;
 class objectDetect;
-
-
-namespace fd{
-
-}
 
 
 class fdObject{
@@ -92,9 +87,13 @@ public:
     vector<Rect> getRects(Mat resp);
     bool backgrndUpdate(const Mat& frame);
 
+    bool addTrackedObjs(const vector<Rect>& rois);
+
 protected:
     vector<fdObject> _objs;
     vector<fdObject> _res;
+    vector<Rect> _tracked_ROIs;
+
     /* Pointers to binary images. */
     Mat * _p_frms = nullptr;
 
@@ -103,8 +102,11 @@ protected:
     int _frm_bound = 1;
 
     Mat _backgrnd = Mat();
+    Mat _backgrnd_i = Mat();
     bool _backgrnd_initialized = false;
-    int _backgrnd_init_counter = 7;
+    int _backgrnd_init_counter = 5;
+    double _alpha_init = 0.8;
+    double _alpha = 0.05;
 
     const int _period;
     unsigned int  _clock = 0;

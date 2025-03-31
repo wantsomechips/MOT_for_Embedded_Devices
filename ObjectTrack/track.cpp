@@ -7,10 +7,6 @@
 
 bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
-    if(_tcr_count == 0 && fd_objs.size() == 0){
-        return false;
-    }
-
     // cout << "DEBUG:objTrack-tick - fd_objs.size: " << fd_objs.size() << endl;
     // cout << "DEBUG:objTrack-tick - _tcr_count: " << _tcr_count << endl;
 
@@ -30,11 +26,11 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
             existed = _p_tcrs[i].isSameObject(fd_rect);
 
             if(existed) {
-                int state_xor = _p_tcrs[i].state ^ TCR_RUNN;
+                int state_and = _p_tcrs[i].state & TCR_RUNN;
                 /* It's a sub-state of TCR_RUNN. */
-                if(state_xor < TCR_RUNN && state_xor != 0 ){
+                if(state_and == TCR_RUNN && _p_tcrs[i].state > TCR_RUNN ){
 
-                   -- _p_tcrs[i].state;
+                   _p_tcrs[i].state --;
 
 
                 }
@@ -63,6 +59,18 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
     return true;
 
+}
+
+vector<Rect> objTrack::getROIs(void){
+
+    vector<Rect> res;
+
+    for(int i = 0; i < _tcr_count; ++ i){
+
+        res.push_back( _p_tcrs[i].getROI());
+    }
+
+    return res;
 }
 
 bool objTrack::tcrFullHandler(void){
@@ -125,6 +133,11 @@ bool Tracking::restart(Mat first_f, Rect roi, bool hog, bool fixed_window,
     _p_kcf -> init(roi,first_f);
 
     return true;
+}
+
+Rect Tracking::getROI(void){
+
+    return _roi;
 }
 
 

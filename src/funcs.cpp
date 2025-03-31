@@ -36,6 +36,7 @@ bool func::MOT(string input){
             vector<fdObject> fd_objs = detect -> getObjects();
 
             track -> tick(frame, fd_objs);
+            detect -> addTrackedObjs( track -> getROIs());
 
             /* Only for testing object detection. */
             for(fdObject& fd_obj: fd_objs){
@@ -45,6 +46,7 @@ bool func::MOT(string input){
         }
         else{
             track -> tick(frame);
+            detect -> addTrackedObjs( track -> getROIs());
         }
 
         cv::imshow(string("Test Set: ") + NAME,frame);

@@ -20,7 +20,7 @@
 
 /* Sub-state of TCR_RUNN, represents how many detections needed 
    to  confirm a newly detected object. */
-#define TCR_RUNN_3 (0x01 << 4 + 3)
+#define TCR_RUNN_3 (TCR_RUNN + 3)
 
 
 #define MAX_TCR 20
@@ -51,6 +51,8 @@ public:
     bool isSameObject(const Rect& bbox);
     bool restart(Mat first_f, Rect roi,bool hog = true, bool fixed_window = true, 
         bool multiscale = true, bool lab = true);
+
+    Rect getROI(void);
 
 protected:
     int _id;
@@ -84,6 +86,7 @@ public:
 
     bool tick(Mat& frame, vector<fdObject> fd_objs = {});
     bool tcrFullHandler(void);
+    vector<Rect> getROIs(void);
 
     const int max_tcr;
 
