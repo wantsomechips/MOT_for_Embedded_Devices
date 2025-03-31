@@ -28,16 +28,6 @@ KCFTracker::KCFTracker(bool hog, bool fixed_window, bool multiscale, bool lab)
     //output_sigma_factor = 0.1;
     output_sigma_factor = 0.125;
 
-    /* APCE. */
-    beta_1 = 0.3;
-    beta_2 = 0.3;  
-    apce_timer = 0;  
-    mean_peak_value = 0;
-    mean_apce_value = 0;
-    current_apce_value = 0;
-    apce_accepted = true;
-
-
     if (hog) {    // HOG
         // VOT
         interp_factor = 0.012;
@@ -110,7 +100,8 @@ void KCFTracker::init(const cv::Rect &roi, cv::Mat image)
  }
 
 // Update position based on the new frame
-cv::Rect KCFTracker::update(cv::Mat image)
+cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alpha_apce, float& peak_value,  
+    float& mean_peak_value, float& mean_apce_value, float& current_apce_value, bool& apce_accepted)
 {
     if (_roi.x + _roi.width <= 0) _roi.x = -_roi.width + 1;
     if (_roi.y + _roi.height <= 0) _roi.y = -_roi.height + 1;
@@ -121,15 +112,16 @@ cv::Rect KCFTracker::update(cv::Mat image)
     float cy = _roi.y + _roi.height / 2.0f;
 
 
-    float peak_value;
-    cv::Point2f res = detect(_tmpl, getFeatures(image, 0, 1.0f), peak_value);
+    cv::Point2f res = detect(_tmpl, getFeatures(image, 0, 1.0f), peak_value, beta_1, beta_2, 
+            alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
 
     if(apce_accepted == true){
 
         if (scale_step != 1) {
             // Test at a smaller _scale
             float new_peak_value;
-            cv::Point2f new_res = detect(_tmpl, getFeatures(image, 0, 1.0f / scale_step), new_peak_value);
+            cv::Point2f new_res = detect(_tmpl, getFeatures(image, 0, 1.0f / scale_step), new_peak_value,
+                beta_1, beta_2, alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
 
             if (scale_weight * new_peak_value > peak_value) {
                 res = new_res;
@@ -140,7 +132,9 @@ cv::Rect KCFTracker::update(cv::Mat image)
             }
 
             // Test at a bigger _scale
-            new_res = detect(_tmpl, getFeatures(image, 0, scale_step), new_peak_value);
+            new_res = detect(_tmpl, getFeatures(image, 0, scale_step), new_peak_value, beta_1, beta_2, 
+                alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
+
 
             if (scale_weight * new_peak_value > peak_value) {
                 res = new_res;
@@ -172,7 +166,9 @@ cv::Rect KCFTracker::update(cv::Mat image)
 
 
 // Detect object in the current frame.
-cv::Point2f KCFTracker::detect(cv::Mat z, cv::Mat x, float &peak_value)
+cv::Point2f KCFTracker::detect(cv::Mat z, cv::Mat x, float &peak_value, float beta_1, float beta_2, 
+            float alpha_apce, float& mean_peak_value, float& mean_apce_value, float& current_apce_value, 
+            bool& apce_accepted)
 {
     using namespace FFTTools;
 
@@ -198,15 +194,16 @@ cv::Point2f KCFTracker::detect(cv::Mat z, cv::Mat x, float &peak_value)
         }
     }
     mean_diff = diff_sum/(res.cols*res.rows);
+
+    /* APCE. */
     current_apce_value = std::pow((maxVal-minVal),2)/mean_diff;
 
-    if(maxVal > beta_1*mean_peak_value && current_apce_value > beta_2*mean_apce_value){
+    if(maxVal > beta_1 * mean_peak_value && current_apce_value > beta_2 * mean_apce_value){
+
         apce_accepted = true;
-        if(apce_timer < 10000) {
-            ++apce_timer;
-            mean_apce_value = (mean_apce_value*(apce_timer-1)+current_apce_value)/apce_timer;
-            mean_peak_value = (mean_peak_value*(apce_timer-1)+maxVal)/apce_timer;
-        }
+        mean_apce_value = (1 - alpha_apce) * mean_apce_value + alpha_apce * current_apce_value;
+        mean_peak_value = (1 - alpha_apce) * mean_peak_value + alpha_apce * maxVal;
+
     }
     else{
         apce_accepted = false;

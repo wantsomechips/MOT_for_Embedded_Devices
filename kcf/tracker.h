@@ -28,7 +28,8 @@ public:
    virtual  ~Tracker() { }
 
     virtual void init(const cv::Rect &roi, cv::Mat image) = 0;
-    virtual cv::Rect  update( cv::Mat image)=0;
+    virtual cv::Rect update(cv::Mat image, float beta_1, float beta_2, float alpha_apce, float& peak_value,  
+        float& mean_peak_value, float& mean_apce_value, float& current_apce_value, bool& apce_accepted)=0;
 
 
 protected:

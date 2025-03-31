@@ -98,15 +98,29 @@ bool Tracking::isSameObject(const Rect& bbox){
 }
 
 bool Tracking::update(Mat& frame){
+
     Rect bbox;
-    bbox = _p_kcf -> update(frame);
+    bbox = _p_kcf -> update(frame, _beta_1, _beta_2, _alpha_apce, _peak_value, _mean_peak_value, 
+                            _mean_apce_value, _current_apce_value, _apce_accepted);
     _roi = bbox;
 
     char title[6];
     snprintf(title, sizeof(title), "id:%02d", _id);
 
-    cv::putText(frame, title, cv::Point(bbox.x,bbox.y-1),cv::FONT_HERSHEY_SIMPLEX,
+    char apce_datas[23];
+    snprintf(apce_datas, sizeof(apce_datas), "APCE: %04.1f / %04.1f %c",
+                _current_apce_value, _mean_apce_value, _apce_accepted? 'T' : 'F');
+
+    char peak_datas[20];
+    snprintf(peak_datas, sizeof(peak_datas), "Peak: %04.1f / %04.1f",
+                _peak_value * 100, _mean_peak_value * 100);
+
+    cv::putText(frame, title, cv::Point(bbox.x, bbox.y - 1),cv::FONT_HERSHEY_SIMPLEX,
                          0.5, cv::Scalar(0,0,255), 1, cv::LINE_AA);
+    cv::putText(frame, apce_datas, cv::Point(bbox.x,bbox.y + bbox.height + 13),cv::FONT_HERSHEY_SIMPLEX,
+                         0.3, cv::Scalar(0,255,0), 1, cv::LINE_AA);
+    cv::putText(frame, peak_datas, cv::Point(bbox.x,bbox.y + bbox.height + 13 * 2),cv::FONT_HERSHEY_SIMPLEX,
+                         0.3, cv::Scalar(0,255,0), 1, cv::LINE_AA);
     cv::rectangle(frame,bbox, cv::Scalar(0,0,255));
 
     return true;

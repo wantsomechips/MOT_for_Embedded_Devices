@@ -11,13 +11,13 @@ class KCFTracker : public Tracker
 {
 public:
     // Constructor
-    KCFTracker(bool hog = true, bool fixed_window = true, bool multiscale = true, bool lab = true);
-
+    KCFTracker(bool hog, bool fixed_window, bool multiscale, bool lab);
     // Initialize tracker 
     virtual void init(const cv::Rect &roi, cv::Mat image);
     
     // Update position based on the new frame
-    virtual cv::Rect update(cv::Mat image);
+    virtual cv::Rect update(cv::Mat image, float beta_1, float beta_2, float alpha_apce, float& peak_value,  
+        float& mean_peak_value, float& mean_apce_value, float& current_apce_value, bool& apce_accepted);
 
     float interp_factor; // linear interpolation factor for adaptation
     float sigma; // gaussian kernel bandwidth
@@ -30,18 +30,12 @@ public:
     float scale_step; // scale step for multi-scale estimation
     float scale_weight;  // to downweight detection scores of other scales for added stability
 
-    /* APCE by GH */
-    float beta_1,beta_2;  /* APCE coefficients, beta_1 for mean peak value, beta_2 for mean APCE value.*/
-    uint16_t apce_timer;  /* APCE run times. When APCE runs 10 000 times, we consider mean_peak and mean_apce are stable. */
-    double mean_peak_value;
-    double mean_apce_value;
-    double current_apce_value;
-    bool apce_accepted;
-
 
 protected:
     // Detect object in the current frame.
-    cv::Point2f detect(cv::Mat z, cv::Mat x, float &peak_value);
+    cv::Point2f detect(cv::Mat z, cv::Mat x, float &peak_value, float beta_1, float beta_2, 
+        float alpha_apce, float& mean_peak_value, float& mean_apce_value, float& current_apce_value, 
+        bool& apce_accepted);
 
     // train tracker with a single image
     void train(cv::Mat x, float train_interp_factor);

@@ -60,6 +60,19 @@ protected:
     Rect _roi;
     float _min_iou_req;
 
+    /* APCE. */
+    float _beta_1 = 0.3;
+    float _beta_2 = 0.3;  
+    float _alpha_apce = 0.1;  
+
+    float _mean_apce_value = 0;
+    float _current_apce_value = 0;
+
+    float _peak_value = 0;
+    float _mean_peak_value = 0;
+
+    bool _apce_accepted = true;
+
 };
 
 
