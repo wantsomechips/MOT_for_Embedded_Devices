@@ -197,7 +197,7 @@ bool objDetect::backgrndUpdate(const Mat& frame){
     new_backgrnd.copyTo(_backgrnd, mask);
 
     _backgrnd.convertTo(_backgrnd_i, CV_8UC1);
-    imshow("Bakcgrnd", _backgrnd_i);
+    // imshow("Bakcgrnd", _backgrnd_i);
 
     return true;
 
@@ -266,6 +266,10 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
 
     }
 
+    Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(5,5));
+
+    cv::morphologyEx(resp, resp,cv::MORPH_CLOSE,kernel);
+
     imshow("Resp", resp);
 
     if(_backgrnd_initialized){
@@ -277,7 +281,6 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
         cv::bitwise_and(resp, backgrnd_diff, res);
 
         imshow("Backgrnd Diff",backgrnd_diff);
-        // imshow("Res",res);
 
     }
     else{
@@ -288,14 +291,11 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra){
     // cv::imshow("Resp", res);
 
 
-    // Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(7,7));
+    kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE,cv::Size(3,3));
 
-    // cv::morphologyEx(res, res,cv::MORPH_CLOSE,kernel);
-
-    // kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE,cv::Size(7,7));
-
-    // cv::morphologyEx(res, res,cv::MORPH_DILATE,kernel);
+    cv::morphologyEx(res, res,cv::MORPH_OPEN,kernel);
     
+    imshow("Res",res);
 
     return res;
 }

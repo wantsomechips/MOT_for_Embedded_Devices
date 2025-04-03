@@ -9,21 +9,21 @@
 #include "kcftracker.hpp"
 
 /* Tracker States. */
-/* Inited but not used yet. */
-#define TCR_INIT (0x01 << 1)
-/* Should be removed after object lost for a long while. */
-#define TCR_RMVD (0x01 << 2)
-/* Object lost. */
-#define TCR_LOST (0x01 << 3)
 /* It's correctly running. */
-#define TCR_RUNN (0x01 << 4)
-
+#define TCR_RUNN (0x01 << 2)
 /* Sub-state of TCR_RUNN, represents how many detections needed 
    to  confirm a newly detected object. */
 #define TCR_RUNN_3 (TCR_RUNN + 3)
+/* Ready to use. */
+#define TCR_READY (0x01 << 3)
+/* Object lost. */
+#define TCR_LOST (0x01 << 4)
+#define TCR_LOST_3 (TCR_LOST + 3)
+
+#define INVALID_INDEX (-1)
 
 
-#define MAX_TCR 20
+#define MAX_TCR (20)
 
 class Tracking{
 
@@ -35,7 +35,7 @@ public:
     Tracking():_id(-1), _min_iou_req(-1) {}
     Tracking(int id, double min_iou_req = MIN_IOU_REQ)
                 :_id(id), _min_iou_req(min_iou_req){
-        state = TCR_INIT;
+        state = TCR_READY;
     }
     ~ Tracking(){
         if( _p_kcf != nullptr){
@@ -44,15 +44,14 @@ public:
     }
 
     bool update(Mat& frame);
-    bool init(Mat first_f, Rect roi,bool hog = true, bool fixed_window = true, 
-                                    bool multiscale = true, bool lab = true);
 
-    int id(void);
     bool isSameObject(const Rect& bbox);
-    bool restart(Mat first_f, Rect roi,bool hog = true, bool fixed_window = true, 
-        bool multiscale = true, bool lab = true);
+    bool restart(Mat first_f, Rect roi, char _state = TCR_RUNN_3, 
+        bool hog = true, bool fixed_window = true, bool multiscale = true, 
+        bool lab = true);
 
     Rect getROI(void);
+    float getScore(void);
 
 protected:
     int _id;
@@ -60,9 +59,11 @@ protected:
     Rect _roi;
     float _min_iou_req;
 
+    float _score = 0;
+
     /* APCE. */
-    float _beta_1 = 0.3;
-    float _beta_2 = 0.3;  
+    float _beta_1 = 0.5;
+    float _beta_2 = 0.5;  
     float _alpha_apce = 0.1;  
 
     float _mean_apce_value = 0;
@@ -98,15 +99,17 @@ public:
     }
 
     bool tick(Mat& frame, vector<fdObject> fd_objs = {});
-    bool tcrFullHandler(void);
     vector<Rect> getROIs(void);
+    int tcrFullHandler(void);
+    
+    int getFreeTcrIndex(void);
+
 
     const int max_tcr;
 
 protected:
 
     Tracking* _p_tcrs = nullptr;
-    int _tcr_count = 0;
 
 };
 

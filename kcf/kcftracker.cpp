@@ -115,51 +115,54 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
     cv::Point2f res = detect(_tmpl, getFeatures(image, 0, 1.0f), peak_value, beta_1, beta_2, 
             alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
 
-    if(apce_accepted == true){
 
-        if (scale_step != 1) {
-            // Test at a smaller _scale
-            float new_peak_value;
-            cv::Point2f new_res = detect(_tmpl, getFeatures(image, 0, 1.0f / scale_step), new_peak_value,
-                beta_1, beta_2, alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
+    if (scale_step != 1) {
+        // Test at a smaller _scale
+        float new_peak_value;
+        cv::Point2f new_res = detect(_tmpl, getFeatures(image, 0, 1.0f / scale_step), new_peak_value,
+            beta_1, beta_2, alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
 
-            if (scale_weight * new_peak_value > peak_value) {
-                res = new_res;
-                peak_value = new_peak_value;
-                _scale /= scale_step;
-                _roi.width /= scale_step;
-                _roi.height /= scale_step;
-            }
-
-            // Test at a bigger _scale
-            new_res = detect(_tmpl, getFeatures(image, 0, scale_step), new_peak_value, beta_1, beta_2, 
-                alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
-
-
-            if (scale_weight * new_peak_value > peak_value) {
-                res = new_res;
-                peak_value = new_peak_value;
-                _scale *= scale_step;
-                _roi.width *= scale_step;
-                _roi.height *= scale_step;
-            }
+        if (scale_weight * new_peak_value > peak_value) {
+            res = new_res;
+            peak_value = new_peak_value;
+            _scale /= scale_step;
+            _roi.width /= scale_step;
+            _roi.height /= scale_step;
         }
 
-    // Adjust by cell size and _scale
+        // Test at a bigger _scale
+        new_res = detect(_tmpl, getFeatures(image, 0, scale_step), new_peak_value, beta_1, beta_2, 
+            alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
 
-        _roi.x = cx - _roi.width / 2.0f + ((float) res.x * cell_size * _scale);
-        _roi.y = cy - _roi.height / 2.0f + ((float) res.y * cell_size * _scale);
 
-        if (_roi.x >= image.cols - 1) _roi.x = image.cols - 1;
-        if (_roi.y >= image.rows - 1) _roi.y = image.rows - 1;
-        if (_roi.x + _roi.width <= 0) _roi.x = -_roi.width + 2;
-        if (_roi.y + _roi.height <= 0) _roi.y = -_roi.height + 2;
+        if (scale_weight * new_peak_value > peak_value) {
+            res = new_res;
+            peak_value = new_peak_value;
+            _scale *= scale_step;
+            _roi.width *= scale_step;
+            _roi.height *= scale_step;
+        }
+    }
 
-        assert(_roi.width >= 0 && _roi.height >= 0);
+// Adjust by cell size and _scale
+
+    _roi.x = cx - _roi.width / 2.0f + ((float) res.x * cell_size * _scale);
+    _roi.y = cy - _roi.height / 2.0f + ((float) res.y * cell_size * _scale);
+
+    if (_roi.x >= image.cols - 1) _roi.x = image.cols - 1;
+    if (_roi.y >= image.rows - 1) _roi.y = image.rows - 1;
+    if (_roi.x + _roi.width <= 0) _roi.x = -_roi.width + 2;
+    if (_roi.y + _roi.height <= 0) _roi.y = -_roi.height + 2;
+
+    assert(_roi.width >= 0 && _roi.height >= 0);
+
+    /* APCE. */
+    if(apce_accepted == true){
 
         cv::Mat x = getFeatures(image, 0);
         train(x, interp_factor);
     }
+
 
     return _roi;
 }

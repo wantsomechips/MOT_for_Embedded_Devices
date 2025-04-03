@@ -10,14 +10,14 @@ using std::vector;
 
 /* Frame Difference threshold. */
 #define FD_THRESHOLD (15)
-#define BAKCGRND_THRESHOLD (50)
+#define BAKCGRND_THRESHOLD (20)
 #define MIN_BBOX_SIZE (500)
 
 /* Detect Objects every DETEC_INTV frames. */
 #define DETEC_INTV (3)
 
 /* Miminum frames number requirement for detection. */
-#define MIN_DETEC_FRM_REQ ( DETEC_INTV / 2 )
+#define MIN_DETEC_FRM_REQ ( DETEC_INTV / 2 + 1)
 
 
 class fdObject;
@@ -30,7 +30,7 @@ public:
 
     fdObject():_min_iou_req(-1),_min_frm_req(-1){}
 
-    fdObject(const Rect& bbox, double min_iou_req = MIN_IOU_REQ, int min_frm_req = MIN_DETEC_FRM_REQ):
+    fdObject(const Rect& bbox, float min_iou_req = MIN_IOU_REQ, int min_frm_req = MIN_DETEC_FRM_REQ):
                 _min_iou_req(min_iou_req), _min_frm_req(min_frm_req){
         /* Deep Copy. */
         _rects.push_back(bbox);
@@ -49,7 +49,7 @@ protected:
 
     vector<Rect> _rects;
 
-    double _min_iou_req;
+    float _min_iou_req;
     int _min_frm_req;
 
 };

@@ -30,10 +30,11 @@ bool func::MOT(string input){
 
     Mat frame;
 
+    vector<fdObject> fd_objs;
     while(cap.read(frame)){
 
         if(detect -> tick(frame)){
-            vector<fdObject> fd_objs = detect -> getObjects();
+            fd_objs = detect -> getObjects();
 
             track -> tick(frame, fd_objs);
             detect -> addTrackedObjs( track -> getROIs());

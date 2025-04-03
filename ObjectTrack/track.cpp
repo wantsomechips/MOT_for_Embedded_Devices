@@ -8,34 +8,49 @@
 bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
     // cout << "DEBUG:objTrack-tick - fd_objs.size: " << fd_objs.size() << endl;
-    // cout << "DEBUG:objTrack-tick - _tcr_count: " << _tcr_count << endl;
 
-    for(int i = 0; i < _tcr_count; ++ i){
+    /* Update trackers. */
+    for(int i = 0; i < max_tcr; i ++){
 
-        _p_tcrs[i].update(frame);
+        char state = _p_tcrs[i].state;
+
+        if(state & TCR_RUNN){
+            _p_tcrs[i].update(frame);
+        }
+        else if(state == TCR_LOST){
+            state = TCR_READY;
+        }
+        else if(state & TCR_LOST){
+            _p_tcrs[i].update(frame);
+        }
     }
 
+    /* Detecting new objects. */
     int i_write = 0;
-    for(int i_read = 0; i_read < fd_objs.size(); ++ i_read){
+    for(int i_read = 0; i_read < fd_objs.size(); i_read ++){
 
         Rect fd_rect = fd_objs[i_read].resultRect();
 
         bool existed = false;
-        for(int i = 0; i < _tcr_count; ++ i){
+        for(int i = 0; i < max_tcr; ++ i){
 
-            existed = _p_tcrs[i].isSameObject(fd_rect);
+            /* It's TRC_RUNN or sut-states. */
+            if(_p_tcrs[i].state & TCR_RUNN){
 
-            if(existed) {
-                int state_and = _p_tcrs[i].state & TCR_RUNN;
-                /* It's a sub-state of TCR_RUNN. */
-                if(state_and == TCR_RUNN && _p_tcrs[i].state > TCR_RUNN ){
+                existed = _p_tcrs[i].isSameObject(fd_rect);
 
-                   _p_tcrs[i].state --;
+                if(existed) {
+                    /* It's a sub-state of TCR_RUNN. */
+                    if(_p_tcrs[i].state != TCR_RUNN){
 
+                        _p_tcrs[i].state --;
+                        /* Merging */
+                        _p_tcrs[i].restart(frame,fd_rect | _p_tcrs[i].getROI(),
+                                             _p_tcrs[i].state);
 
+                    }
+                    break;
                 }
-
-                break;
             }
         }
 
@@ -48,13 +63,15 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
     for(fdObject& fd_obj: fd_objs){
 
-        _p_tcrs[_tcr_count].init(frame, fd_obj.resultRect());
-        ++ _tcr_count;
+        int index = getFreeTcrIndex();
 
-        if(_tcr_count >= max_tcr){
+        if(index == INVALID_INDEX){
 
-            this -> tcrFullHandler();
+            index = tcrFullHandler();
         }
+
+        _p_tcrs[index].restart(frame, fd_obj.resultRect());
+
     }
 
     return true;
@@ -65,36 +82,14 @@ vector<Rect> objTrack::getROIs(void){
 
     vector<Rect> res;
 
-    for(int i = 0; i < _tcr_count; ++ i){
+    for(int i = 0; i < max_tcr; ++ i){
 
-        res.push_back( _p_tcrs[i].getROI());
+        if(_p_tcrs[i].state & TCR_RUNN){
+            res.push_back( _p_tcrs[i].getROI());
+        }
     }
 
     return res;
-}
-
-bool objTrack::tcrFullHandler(void){
-    /* To be done. */
-    bool tcr_full_handle = false;
-    _tcr_count --;
-
-
-    if(tcr_full_handle == false){
-        std::cerr << "ERROR: Failed to handle tcrFullHandler" << endl;
-        return false;
-    }
-    return true;
-}
-
-int Tracking::id(void){
-    return _id;
-}
-
-bool Tracking::isSameObject(const Rect& bbox){
-
-    float iou = func::IoU(_roi, bbox);
-
-    return (iou > _min_iou_req);
 }
 
 bool Tracking::update(Mat& frame){
@@ -103,6 +98,20 @@ bool Tracking::update(Mat& frame){
     bbox = _p_kcf -> update(frame, _beta_1, _beta_2, _alpha_apce, _peak_value, _mean_peak_value, 
                             _mean_apce_value, _current_apce_value, _apce_accepted);
     _roi = bbox;
+
+    if(_apce_accepted){
+        _score = 1000.0 + _current_apce_value + _peak_value;
+
+    }
+    else{
+        _score = 0.0 + _current_apce_value + _peak_value;
+        if(state & TCR_RUNN){
+            state = TCR_LOST_3;
+        }
+        else{
+            state --;
+        }
+    }
 
     char title[6];
     snprintf(title, sizeof(title), "id:%02d", _id);
@@ -126,27 +135,58 @@ bool Tracking::update(Mat& frame){
     return true;
 }
 
+int objTrack::tcrFullHandler(void){
 
-bool Tracking::init(Mat first_f, Rect roi, bool hog, bool fixed_window,
-                         bool multiscale, bool lab){
+    /* Return the index of Tracker with minimum score. */
+    int index = 0;
+    float score_min = _p_tcrs[0].getScore();
+    float score;
+    for(int i = 1; i < max_tcr; ++ i){
+        score = _p_tcrs[i].getScore();
+        if(score < score_min){
+            score_min = score;
+            index = i;
+        }
+    }
 
-    state = TCR_RUNN_3;
+    return index;
+}
+
+
+int objTrack::getFreeTcrIndex(void){
+
+    for(int i = 0;i < max_tcr; i++){
+
+        if(_p_tcrs[i].state == TCR_READY){
+            
+            return i;
+        }
+    }
+
+    return INVALID_INDEX;
+}
+
+bool Tracking::restart(Mat first_f, Rect roi, char _state, bool hog, 
+    bool fixed_window, bool multiscale, bool lab){
+
     _roi = roi;
+    state = _state;
+    if(_p_kcf != nullptr) delete _p_kcf;
     _p_kcf = new KCFTracker(hog, fixed_window, multiscale, lab);
     _p_kcf -> init(roi,first_f);
 
     return true;
 }
 
-bool Tracking::restart(Mat first_f, Rect roi, bool hog, bool fixed_window,
-    bool multiscale, bool lab){
+float Tracking::getScore(void){
+    return _score;
+}
 
-    _roi = roi;
-    if(_p_kcf != nullptr) delete _p_kcf;
-    _p_kcf = new KCFTracker(hog, fixed_window, multiscale, lab);
-    _p_kcf -> init(roi,first_f);
+bool Tracking::isSameObject(const Rect& bbox){
 
-    return true;
+    float iou = func::IoU(_roi, bbox);
+
+    return (iou > _min_iou_req);
 }
 
 Rect Tracking::getROI(void){
