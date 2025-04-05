@@ -34,7 +34,7 @@ using cv::Mat, cv::Rect, cv::Point, cv::Size;
 
 namespace func{
 
-    double IoU(const Rect& bbox_a, const Rect& bbox_b);
+    float IoU(const Rect& bbox_a, const Rect& bbox_b);
     bool MOT(string input);
 }
 

@@ -34,19 +34,29 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
         bool existed = false;
         for(int i = 0; i < max_tcr; ++ i){
 
-            /* It's TRC_RUNN or sut-states. */
-            if(_p_tcrs[i].state & TCR_RUNN){
+            Tracking& cur_tcr  = _p_tcrs[i];
 
-                existed = _p_tcrs[i].isSameObject(fd_rect);
+            /* It's TRC_RUNN or sut-states. */
+            if(cur_tcr.state & TCR_RUNN){
+
+
+
+                existed = cur_tcr.isSameObject(fd_rect);
 
                 if(existed) {
                     /* It's a sub-state of TCR_RUNN. */
-                    if(_p_tcrs[i].state != TCR_RUNN){
+                    if(cur_tcr.state != TCR_RUNN){
 
-                        _p_tcrs[i].state --;
-                        /* Merging */
-                        _p_tcrs[i].restart(frame,fd_rect | _p_tcrs[i].getROI(),
-                                             _p_tcrs[i].state);
+                        cur_tcr.state --;
+                        /* Re-start KCF with new Rect if it's more reliable. */
+                        Rect kcf_rect = cur_tcr.getROI();
+                        float iou = func::IoU(fd_rect, kcf_rect);
+
+                        if(iou > _min_iou_req && fd_rect.area() > 1.1 * kcf_rect.area() 
+                            && fd_rect.area() < 1.3 * kcf_rect.area()){
+
+                            cur_tcr.restart(frame, fd_rect, cur_tcr.state);
+                        }
 
                     }
                     break;

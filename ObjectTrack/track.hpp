@@ -29,9 +29,6 @@ class Tracking{
 
 public:
 
-    /* 8 bit. */
-    char state;
-
     Tracking():_id(-1), _min_iou_req(-1) {}
     Tracking(int id, double min_iou_req = MIN_IOU_REQ)
                 :_id(id), _min_iou_req(min_iou_req){
@@ -52,6 +49,9 @@ public:
 
     Rect getROI(void);
     float getScore(void);
+
+    /* 8 bit. */
+    char state;
 
 protected:
     int _id;
@@ -83,7 +83,8 @@ public:
 
     objTrack():max_tcr(0){}
 
-    objTrack(int max_tcr = MAX_TCR):max_tcr(max_tcr){
+    objTrack(int max_tcr = MAX_TCR, float min_iou_req = MIN_IOU_REQ):
+                    max_tcr(max_tcr), _min_iou_req(min_iou_req){
 
         _p_tcrs = new Tracking[max_tcr];
 
@@ -110,6 +111,7 @@ public:
 protected:
 
     Tracking* _p_tcrs = nullptr;
+    float _min_iou_req;
 
 };
 

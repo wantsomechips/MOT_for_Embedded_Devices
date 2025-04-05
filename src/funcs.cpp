@@ -25,10 +25,14 @@ bool func::MOT(string input){
         return false;
     }
 
-    objDetect* detect = new objDetect(DETEC_INTV);
-    objTrack* track = new objTrack(MAX_TCR);
-
     Mat frame;
+
+    if(cap.read(frame) == false){
+        throw std::runtime_error("Failed to read first frame.");
+    }
+
+    objDetect* detect = new objDetect(frame,DETEC_INTV);
+    objTrack* track = new objTrack(MAX_TCR);
 
     vector<fdObject> fd_objs;
     while(cap.read(frame)){
@@ -87,25 +91,21 @@ merge the small fragments caused by occlusion.
 @ iou:      0.0 ~ 1.0，intersection over union;
 
 --- --- --- --- --- --- --- --- --- */
-double func::IoU(const Rect& bbox_a, const Rect& bbox_b){
+float func::IoU(const Rect& bbox_a, const Rect& bbox_b){
 
     int inter_area = ( bbox_a & bbox_b).area();
 
     double inter_area_ratio = 1.0 * inter_area / std::min(bbox_a.area(), bbox_b.area());
 
     /* Believe that it's just a fragment caused by occlusion. */
-    if(inter_area_ratio > 0.8){
+
+    float iou = 1.0 * inter_area / (bbox_a.area() + bbox_b.area() - inter_area);
+
+    /* Return 1.0 only when one bbox is included in the other. */
+    if(inter_area_ratio > 0.8 && iou < MIN_IOU_REQ){
 
         return 1.0;
     }
-    
-
-    double iou = 1.0 * inter_area / (bbox_a.area() + bbox_b.area() - inter_area);
-    
-    // double iou = 1.0 * inter_area / std::min(bbox_a.area(), bbox_b.area());
-
-
-    cout << "DEBUG::IoU: " << iou << endl;
     
     return iou;
 }
