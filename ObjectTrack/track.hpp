@@ -105,6 +105,8 @@ public:
     
     int getFreeTcrIndex(void);
 
+    bool addBackgrnd(Mat backgrnd);
+
 
     const int max_tcr;
 
@@ -112,6 +114,9 @@ protected:
 
     Tracking* _p_tcrs = nullptr;
     float _min_iou_req;
+
+    /* CV_8UC1 background. */
+    Mat _backgrnd_i = Mat();
 
 };
 

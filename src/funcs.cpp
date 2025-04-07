@@ -43,6 +43,8 @@ bool func::MOT(string input){
             track -> tick(frame, fd_objs);
             detect -> addTrackedObjs( track -> getROIs());
 
+            track -> addBackgrnd( detect -> getBackgrnd());
+
             /* Only for testing object detection. */
             for(fdObject& fd_obj: fd_objs){
                 /* Blue(FD). */
@@ -95,16 +97,16 @@ float func::IoU(const Rect& bbox_a, const Rect& bbox_b){
 
     int inter_area = ( bbox_a & bbox_b).area();
 
-    double inter_area_ratio = 1.0 * inter_area / std::min(bbox_a.area(), bbox_b.area());
+    double inter_area_ratio = 1.0f * inter_area / std::min(bbox_a.area(), bbox_b.area());
 
     /* Believe that it's just a fragment caused by occlusion. */
 
-    float iou = 1.0 * inter_area / (bbox_a.area() + bbox_b.area() - inter_area);
+    float iou = 1.0f * inter_area / (bbox_a.area() + bbox_b.area() - inter_area);
 
     /* Return 1.0 only when one bbox is included in the other. */
-    if(inter_area_ratio > 0.8 && iou < MIN_IOU_REQ){
+    if(inter_area_ratio > 0.8f && iou < MIN_IOU_REQ){
 
-        return 1.0;
+        return 1.0f;
     }
     
     return iou;

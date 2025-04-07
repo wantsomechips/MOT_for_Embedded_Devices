@@ -39,8 +39,6 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
             /* It's TRC_RUNN or sut-states. */
             if(cur_tcr.state & TCR_RUNN){
 
-
-
                 existed = cur_tcr.isSameObject(fd_rect);
 
                 if(existed) {
@@ -53,7 +51,7 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
                         float iou = func::IoU(fd_rect, kcf_rect);
 
                         if(iou > _min_iou_req && fd_rect.area() > 1.1 * kcf_rect.area() 
-                            && fd_rect.area() < 1.3 * kcf_rect.area()){
+                            && fd_rect.area() < 1.3f * kcf_rect.area()){
 
                             cur_tcr.restart(frame, fd_rect, cur_tcr.state);
                         }
@@ -110,11 +108,11 @@ bool Tracking::update(Mat& frame){
     _roi = bbox;
 
     if(_apce_accepted){
-        _score = 1000.0 + _current_apce_value + _peak_value;
+        _score = 1000.0f + _current_apce_value + _peak_value;
 
     }
     else{
-        _score = 0.0 + _current_apce_value + _peak_value;
+        _score = 0.0f + _current_apce_value + _peak_value;
         if(state & TCR_RUNN){
             state = TCR_LOST_3;
         }
@@ -174,6 +172,12 @@ int objTrack::getFreeTcrIndex(void){
     }
 
     return INVALID_INDEX;
+}
+
+bool objTrack::addBackgrnd(Mat backgrnd){
+    backgrnd.copyTo(_backgrnd_i);
+
+    return true;
 }
 
 bool Tracking::restart(Mat first_f, Rect roi, char _state, bool hog, 

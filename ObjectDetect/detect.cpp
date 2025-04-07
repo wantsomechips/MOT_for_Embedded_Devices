@@ -14,9 +14,6 @@ CONS:
 - Easily disturbed by noise(like tree leaves moving) and background 
   changes(like sudden brightness changes).
 
-THIS FILE USES TWO FRAMES DIFFERENCE.
-
-
 --- --- --- --- --- --- --- --- --- */
 
 #include "detect.hpp"
@@ -30,11 +27,10 @@ Rect fdObject::resultRect(void){
 
 bool fdObject::isSameObject(const Rect& bbox){
 
-    Rect newest = _rects.back();
-    float iou = func::IoU(newest,bbox);
+    float iou = func::IoU(_result,bbox);
 
     /* If one bbox is included in the other. */
-    if((1.0 - iou) < 1e-3) {
+    if((1.0f - iou) < 1e-3f) {
 
         return false;
     }
@@ -43,38 +39,33 @@ bool fdObject::isSameObject(const Rect& bbox){
     return (iou > _min_iou_req);
 }
 
-bool fdObject::getResult(void){
+bool fdObject::getResult(){
 
-    /* Detection failed. */
-    if (_rects.size() < _min_frm_req){
-        return false;
-    }
-
-
-    if(_rects.size() <= 2){
+    if(_rects.size() == 2){
 
         Rect pre = _rects[0];
         Rect cur = _rects[1];
+        Rect final_rect = _result;
 
         /* Use centroid to determine direction. */
-        Point pre_center(pre.x + pre.width / 2.0, pre.y + pre.height / 2.0);
-        Point cur_center(cur.x + cur.width / 2.0, cur.y + cur.height / 2.0);
+        Point pre_center(pre.x + pre.width / 2.0f, pre.y + pre.height / 2.0f);
+        Point cur_center(cur.x + cur.width / 2.0f, cur.y + cur.height / 2.0f);
         Point dir =  cur_center - pre_center;
 
         /* Normalization and expand. */
-        float expand_ratio = 0.1;
+        float expand_ratio = 0.1f;
         float norm = std::sqrt(dir.x * dir.x + dir.y * dir.y);
 
         float dx = dir.x / norm * expand_ratio * cur.width;
         float dy = dir.y / norm * expand_ratio * cur.height;
 
         /* Top left points. */
-        float tl_x = cur.x;
-        float tl_y = cur.y;
+        float tl_x = final_rect.x;
+        float tl_y = final_rect.y;
 
         /* Bottom right points. */
-        float br_x = cur.x + cur.width;
-        float br_y = cur.y + cur.height;
+        float br_x = final_rect.x + final_rect.width;
+        float br_y = final_rect.y + final_rect.height;
 
         if(dx > 0){
             br_x += dx;
@@ -95,22 +86,15 @@ bool fdObject::getResult(void){
 
         if(_result.empty()){
            
-            _result = cur;
-        }
-    }
-    else{
-        /* Simply merge rects. */
-        Rect merged = _rects[0];
-        for (int i = 1; i < _rects.size(); ++i) {
-            merged |= _rects[i];
+            _result = final_rect;
+            return false;
         }
 
-        _result = merged;
+        /* Return `true` if the expansion succeeded.*/
+        return true;
     }
 
-
-    return true;
-
+    return false;
 }
 
 
@@ -124,9 +108,7 @@ bool objDetect::tick(const Mat& frame){
     Mat& pre_frame = _p_frms[(_clock -1) % _period];
     Mat& cur_frame = _p_frms[round];
 
-
-    // cout << "DEBUG: objDetect::tick - round: "<< round <<endl;
-
+    /* Use frame.clone() or copyTo() to Deep Copy. Otherwise it would be Shallow Copy. */
     if(_clock < _clock_bound){
         ++ _clock;
     }
@@ -134,11 +116,15 @@ bool objDetect::tick(const Mat& frame){
         _clock = 0;
     }
 
+    /* Only process the first 2 frames per period. */
+    if(round > 1){
 
-    /* It's turn to calculate 3 Frames Difference. */
-    bool in_three_frm_turn = ((round % 2) == 1);
+        return false;
+    }
 
-    /* Use frame.clone() to Deep Copy. Otherwise it would be Shallow Copy. */
+    /* Run 3 Frames Difference and process results at the second frame. */
+    bool run_three_frm_diff = (round == 1);
+    bool get_result = (round == 1);
 
     /* 2 Frames Difference. */
     /* Remove noise. */
@@ -146,128 +132,107 @@ bool objDetect::tick(const Mat& frame){
     cv::medianBlur(cur_frame,cur_frm_blur, 5);
     cv::medianBlur(pre_frame,pre_frm_blur, 5);
 
-    Mat two_fd_diff;
+    Mat& two_fd_diff = _fd_diff[round];
     cv::absdiff(cur_frm_blur, pre_frm_blur, two_fd_diff);
 
-    /* Use frame.clone() or copyTo() to Deep Copy. Otherwise it would be Shallow Copy. */
-    two_fd_diff.copyTo(_last_fd[round % 2]);
-
-    Mat two_fd_resp;
+    Mat& two_fd_resp = _fd_resp[round];
     cv::threshold(two_fd_diff, two_fd_resp, FD_THRESHOLD, 255, cv::THRESH_BINARY);
-
+    
+    /* Kernel for morphology operations. */
+    Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
+    Mat mid_kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(6,6));
+    Mat big_kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(9,9));
 
     /* 3 Frames Difference after collecting two 2FD. */
-    Mat three_fd_diff, three_fd_resp;
-    if(in_three_frm_turn){
-
-        cv::bitwise_or(_last_fd[0], _last_fd[1], three_fd_diff);
-        cv::threshold(three_fd_diff, three_fd_resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
+    if(run_three_frm_diff){
+        Mat three_fd_diff;
+        cv::bitwise_or(_fd_diff[0], _fd_diff[1], three_fd_diff);
+        cv::threshold(three_fd_diff, _three_fd_resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
     }
- 
-    /* Morphology operations. */
-    Mat kernel;
-    if(_backgrnd_initialized){
-        /* Remove noise. */
-        // kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-        // cv::morphologyEx(two_fd_resp, two_fd_resp,cv::MORPH_OPEN,kernel);
+    
 
-        kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(9,9));
-        cv::morphologyEx(two_fd_resp, two_fd_resp,cv::MORPH_DILATE,kernel);
-
-        if(round % 2 ==  1){
-            kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-            cv::morphologyEx(three_fd_resp, three_fd_resp,cv::MORPH_OPEN,kernel);
-
-            kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-            cv::morphologyEx(three_fd_resp, three_fd_resp,cv::MORPH_CLOSE,kernel);
-        }
-    }
-    else{
-        kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(9,9));
-        cv::morphologyEx(two_fd_resp, two_fd_resp,cv::MORPH_CLOSE,kernel);
-
-        /* Remove noise. */
-        // kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-        // cv::morphologyEx(resp, resp,cv::MORPH_OPEN,kernel);
-    }
-
-    imshow("2FD_Resp", two_fd_resp);
-    if(in_three_frm_turn){
-        imshow("3FD_Resp", three_fd_resp);
-    }
-
-    /* Background Frame Difference.*/
-    Mat final_resp;
-    Mat backgrnd_diff, backgrnd_resp;
+    /* Background Frame Difference. */
     if(_backgrnd_initialized){
 
+        Mat backgrnd_diff;
         cv::absdiff(cur_frame, _backgrnd_i, backgrnd_diff);
+        
+        Mat& backgrnd_resp = _backgrnd_resp[round];
         cv::threshold(backgrnd_diff, backgrnd_resp, BAKCGRND_THRESHOLD, 255, cv::THRESH_BINARY);
 
-        cv::bitwise_and(two_fd_resp, backgrnd_resp, final_resp);
+        // cv::morphologyEx(backgrnd_resp, backgrnd_resp,cv::MORPH_CLOSE, kernel);
 
-        imshow("Backgrnd Resp",backgrnd_resp);
+        cv::morphologyEx(_three_fd_resp, _three_fd_resp,cv::MORPH_OPEN, kernel);
+        cv::morphologyEx(_three_fd_resp, _three_fd_resp,cv::MORPH_DILATE, big_kernel);
 
     }
-    else{
-        final_resp = two_fd_resp;
-    }
 
-    vector<Rect> obj_rects = objDetect::getRects(final_resp);
+    cv::morphologyEx(two_fd_resp, two_fd_resp,cv::MORPH_CLOSE,big_kernel);
+ 
+    /* Get objects base on 2FD. This is used to supplement the final result. */
+    _fd_obj_rects[round] = getRects(two_fd_resp);
 
-
-    /* First round. Detect objects only in first round. */
-    if(round == 0){
+    /* Collect and return detected obejects. */
+    if(get_result){
 
         Rect image_rect(Point(0,0),Size(cur_frame.cols,cur_frame.rows));
 
-        // cout << "DEBUG: objDetect::tick - obj_rects.size(): "<< obj_rects.size() <<endl;
-        
-        for(const Rect& obj_rect: obj_rects){
+        Mat final_resp = getFinalResp();
+
+        cv::morphologyEx(final_resp, final_resp,cv::MORPH_CLOSE, kernel);
+
+
+        vector<Rect> final_obj_rects = getRects(final_resp);
+
+        for(const Rect& obj_rect: final_obj_rects){
 
             _objs.push_back(fdObject(obj_rect, image_rect));
         }
-    }
-    else{
 
-        for(const Rect& obj_rect: obj_rects){
 
-            for(fdObject& obj: _objs){
-
-                if(obj.isSameObject(obj_rect)){
-                    obj.addRect(obj_rect);
-                    break;
-                }
-            }
-        }
-    }
-
-    /* Collect and return qualified detected obejects. */
-    if(round == _period -1 ){
+        this -> backgrndUpdate(cur_frame);
 
         if(_objs.size() != 0){
-
-            int i_write = 0;
-            for(int i_read = 0; i_read < _objs.size(); ++ i_read){
-
-                if(_objs[i_read].getResult()){
-                    _objs[i_write] = _objs[i_read];
-                    ++ i_write;
-                }
-            }
-            _objs.resize(i_write);
-
-            this -> backgrndUpdate(cur_frame);
-
-            if(_objs.size() != 0){
-                /* Get _objs prepared for next detection. */
-                _res = std::move(_objs);
-                return true;
-            }
+            /* Get _objs prepared for next detection. */
+            _res = std::move(_objs);
+            return true;
         }
     }
 
     return false;
+}
+
+
+Mat objDetect::getFinalResp(){
+
+    Mat final_resp;
+
+
+    if(_backgrnd_initialized){
+
+        cv::bitwise_and(_backgrnd_resp[1], _three_fd_resp, final_resp);
+
+    }
+    else{
+
+        final_resp =  _fd_resp[1];
+
+    }
+
+
+    imshow("3FD_diff", _three_fd_resp);
+    // imshow("2FD_diff1", _fd_resp[0]);
+    // imshow("2FD_diff2", _fd_resp[1]);
+    if(_backgrnd_initialized){
+        // imshow("backgrnd_resp_1", _backgrnd_resp[0]);
+        imshow("backgrnd_resp_2", _backgrnd_resp[1]);
+    }
+    imshow("final_resp", final_resp);
+    
+    cv::waitKey();
+
+    return final_resp;
+
 }
 
 bool objDetect::backgrndUpdate(const Mat& frame){
@@ -403,8 +368,6 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra , bool three_fram
         // cv::morphologyEx(resp, resp,cv::MORPH_OPEN,kernel);
     }
 
-    imshow("Resp", resp);
-
     if(_backgrnd_initialized){
 
         Mat backgrnd_diff;
@@ -425,6 +388,7 @@ Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra , bool three_fram
 
     return res;
 }
+
 
 
 /* --- --- --- --- --- --- --- --- ---
@@ -466,6 +430,9 @@ vector<Rect> objDetect::getRects(Mat resp) {
     return objects;
 }
 
+Mat objDetect::getBackgrnd(void) {
+    return _backgrnd_i;
+}
 
 bool fdObject::addRect(const Rect& bbox){
 

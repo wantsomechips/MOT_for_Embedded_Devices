@@ -10,7 +10,7 @@ using std::vector;
 
 /* Frame Difference threshold. */
 #define FD_THRESHOLD (15)
-#define BAKCGRND_THRESHOLD (20)
+#define BAKCGRND_THRESHOLD (35)
 #define MIN_BBOX_SIZE (500)
 
 /* Detect Objects every DETEC_INTV frames. */
@@ -33,8 +33,9 @@ public:
     fdObject(const Rect& bbox, Rect image_rect,float min_iou_req = MIN_IOU_REQ, 
                 int min_frm_req = MIN_DETEC_FRM_REQ):
                 _image_rect(image_rect), _min_iou_req(min_iou_req), _min_frm_req(min_frm_req){
-        /* Deep Copy. */
-        _rects.push_back(bbox);
+        
+        /* Store the result. */
+        _result = bbox;
     }
 
     bool isSameObject(const Rect& bbox);
@@ -46,6 +47,7 @@ public:
     Rect resultRect(void);
 
 protected:
+
     Rect _result;
 
     Rect _image_rect;
@@ -94,6 +96,11 @@ public:
 
     Mat FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra = Mat(), bool three_frame_diff = false);
     vector<Rect> getRects(Mat resp);
+
+    Mat getFinalResp(void);
+
+    Mat getBackgrnd(void);
+
     bool backgrndUpdate(const Mat& frame);
 
     bool addTrackedObjs(const vector<Rect>& rois);
@@ -112,7 +119,18 @@ protected:
     Mat _backgrnd_i = Mat();
 
     /* Store last two 2 FD results. */
-    Mat _last_fd[2];
+    Mat _fd_diff[2];
+    Mat _fd_resp[2];
+
+    vector<Rect> _fd_obj_rects[2];
+
+    /* Store last the 3 FD Difference result. */
+    Mat _three_fd_resp;
+
+    /* Store last two Background Difference results. */
+    Mat _backgrnd_resp[2];
+
+
     
     bool _backgrnd_initialized = false;
     int _backgrnd_init_counter = 7;
