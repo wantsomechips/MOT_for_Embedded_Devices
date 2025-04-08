@@ -40,10 +40,12 @@ bool func::MOT(string input){
         if(detect -> tick(frame)){
             fd_objs = detect -> getObjects();
 
-            track -> tick(frame, fd_objs);
-            detect -> addTrackedObjs( track -> getROIs());
+            track -> addBackgrndResp( detect -> getBackgrndResp());
 
-            track -> addBackgrnd( detect -> getBackgrnd());
+            track -> tick(frame, fd_objs);
+
+            detect -> addTrackedObjs( track -> getROIs());
+        
 
             /* Only for testing object detection. */
             for(fdObject& fd_obj: fd_objs){
@@ -52,6 +54,7 @@ bool func::MOT(string input){
             }
         }
         else{
+            track -> addBackgrndResp( detect -> getBackgrndResp());
             track -> tick(frame);
             detect -> addTrackedObjs( track -> getROIs());
         }
@@ -74,6 +77,7 @@ bool func::MOT(string input){
     return true;
 
 }
+
 
 
 

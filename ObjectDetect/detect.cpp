@@ -20,12 +20,12 @@ CONS:
 #include <opencv2/opencv.hpp>
 #include "funcs.hpp"
 
-Rect fdObject::resultRect(void){
+Rect fdObject::resultRect(void) const{
 
     return _result;
 }
 
-bool fdObject::isSameObject(const Rect& bbox){
+bool fdObject::isSameObject(const Rect& bbox) const{
 
     float iou = func::IoU(_result,bbox);
 
@@ -430,8 +430,8 @@ vector<Rect> objDetect::getRects(Mat resp) {
     return objects;
 }
 
-Mat objDetect::getBackgrnd(void) {
-    return _backgrnd_i;
+Mat objDetect::getBackgrndResp(void) const{
+    return _backgrnd_resp[1];
 }
 
 bool fdObject::addRect(const Rect& bbox){
@@ -440,7 +440,7 @@ bool fdObject::addRect(const Rect& bbox){
     return true;
 }
 
-vector<fdObject> objDetect::getObjects(void){
+vector<fdObject> objDetect::getObjects(void) const{
 
     return _res;
 }

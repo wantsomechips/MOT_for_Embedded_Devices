@@ -38,13 +38,13 @@ public:
         _result = bbox;
     }
 
-    bool isSameObject(const Rect& bbox);
-
     bool addRect(const Rect& bbox);
 
     bool getResult(void);
 
-    Rect resultRect(void);
+    bool isSameObject(const Rect& bbox) const;
+
+    Rect resultRect(void) const;
 
 protected:
 
@@ -92,14 +92,14 @@ public:
     }
 
     bool tick(const Mat& frame);
-    vector<fdObject> getObjects(void);
+    vector<fdObject> getObjects(void) const;
 
     Mat FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra = Mat(), bool three_frame_diff = false);
     vector<Rect> getRects(Mat resp);
 
     Mat getFinalResp(void);
 
-    Mat getBackgrnd(void);
+    Mat getBackgrndResp(void) const;
 
     bool backgrndUpdate(const Mat& frame);
 

@@ -20,7 +20,7 @@
 #define TCR_LOST (0x01 << 4)
 #define TCR_LOST_3 (TCR_LOST + 3)
 
-#define INVALID_INDEX (-1)
+#define INVAILD_INDEX (-1)
 
 
 #define MAX_TCR (20)
@@ -42,13 +42,16 @@ public:
 
     bool update(Mat& frame);
 
-    bool isSameObject(const Rect& bbox);
     bool restart(Mat first_f, Rect roi, char _state = TCR_RUNN_3, 
         bool hog = true, bool fixed_window = true, bool multiscale = true, 
         bool lab = true);
 
-    Rect getROI(void);
-    float getScore(void);
+    bool isSameObject(const Rect& bbox) const;
+    Rect getROI(void) const;
+    float getScore(void) const;
+    float getApce(void) const;
+    float getPeak(void) const;
+    bool apceIsAccepted(void) const;
 
     /* 8 bit. */
     char state;
@@ -100,12 +103,16 @@ public:
     }
 
     bool tick(Mat& frame, vector<fdObject> fd_objs = {});
-    vector<Rect> getROIs(void);
+
+    Mat getCostMatrix(const vector<fdObject>& fd_objs);
+    bool hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, vector<int>& matched_tcr_index);
+
     int tcrFullHandler(void);
     
     int getFreeTcrIndex(void);
 
-    bool addBackgrnd(Mat backgrnd);
+    vector<Rect> getROIs(void) const;
+    bool addBackgrndResp(Mat backgrnd_resp);
 
 
     const int max_tcr;
@@ -116,7 +123,7 @@ protected:
     float _min_iou_req;
 
     /* CV_8UC1 background. */
-    Mat _backgrnd_i = Mat();
+    Mat _backgrnd_resp = Mat();
 
 };
 

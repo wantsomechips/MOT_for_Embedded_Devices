@@ -31,6 +31,9 @@ using cv::Mat, cv::Rect, cv::Point, cv::Size;
 /* Minmum IoU requirement. */
 #define MIN_IOU_REQ (0.5)
 
+class fdObject;
+class objDetect;
+class objTrack;
 
 namespace func{
 
