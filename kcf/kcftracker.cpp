@@ -87,11 +87,11 @@ KCFTracker::KCFTracker(bool hog, bool fixed_window, bool multiscale, bool lab)
 }
 
 // Initialize tracker 
-void KCFTracker::init(const cv::Rect &roi, cv::Mat image)
+void KCFTracker::init(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance)
 {
     _roi = roi;
     assert(roi.width >= 0 && roi.height >= 0);
-    _tmpl = getFeatures(image, 1);
+    _tmpl = getFeatures(image, 1, appearance);
     _prob = createGaussianPeak(size_patch[0], size_patch[1]);
     _alphaf = cv::Mat(size_patch[0], size_patch[1], CV_32FC2, float(0));
     //_num = cv::Mat(size_patch[0], size_patch[1], CV_32FC2, float(0));
@@ -99,9 +99,16 @@ void KCFTracker::init(const cv::Rect &roi, cv::Mat image)
     train(_tmpl, 1.0); // train with initial frame
  }
 
+bool KCFTracker::getRoiFeature(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance){
+    _roi = roi;
+    assert(roi.width >= 0 && roi.height >= 0);
+    getFeatures(image, 1, appearance);
+    return true;
+}
+
 // Update position based on the new frame
 cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alpha_apce, float& peak_value,  
-    float& mean_peak_value, float& mean_apce_value, float& current_apce_value, bool& apce_accepted)
+    float& mean_peak_value, float& mean_apce_value, float& current_apce_value, bool& apce_accepted, cv::Mat& appearance)
 {
     if (_roi.x + _roi.width <= 0) _roi.x = -_roi.width + 1;
     if (_roi.y + _roi.height <= 0) _roi.y = -_roi.height + 1;
@@ -112,35 +119,49 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
     float cy = _roi.y + _roi.height / 2.0f;
 
 
-    cv::Point2f res = detect(_tmpl, getFeatures(image, 0, 1.0f), peak_value, beta_1, beta_2, 
-            alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
+    cv::Mat appearance_place_holder;
 
+    cv::Point2f res = detect(_tmpl, getFeatures(image, 0, appearance_place_holder, 1.0f), peak_value, beta_1, beta_2, 
+            alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
 
     if (scale_step != 1) {
         // Test at a smaller _scale
         float new_peak_value;
-        cv::Point2f new_res = detect(_tmpl, getFeatures(image, 0, 1.0f / scale_step), new_peak_value,
-            beta_1, beta_2, alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
+        float new_mean_peak_value, new_mean_apce_value, new_current_apce_value;
+        bool new_apce_accepted;
+
+        cv::Point2f new_res = detect(_tmpl, getFeatures(image, 0, appearance_place_holder, 1.0f / scale_step), new_peak_value,
+            beta_1, beta_2, alpha_apce, new_mean_peak_value, new_mean_apce_value, new_current_apce_value, new_apce_accepted);
 
         if (scale_weight * new_peak_value > peak_value) {
             res = new_res;
-            peak_value = new_peak_value;
             _scale /= scale_step;
             _roi.width /= scale_step;
             _roi.height /= scale_step;
+
+            peak_value = new_peak_value;
+            mean_peak_value = new_mean_peak_value;
+            mean_apce_value = new_mean_apce_value;
+            current_apce_value = new_current_apce_value;
+            apce_accepted = new_apce_accepted;
         }
 
         // Test at a bigger _scale
-        new_res = detect(_tmpl, getFeatures(image, 0, scale_step), new_peak_value, beta_1, beta_2, 
-            alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
+        new_res = detect(_tmpl, getFeatures(image, 0, appearance_place_holder, scale_step), new_peak_value, beta_1, beta_2, 
+            alpha_apce, new_mean_peak_value, new_mean_apce_value, new_current_apce_value, new_apce_accepted);
 
 
         if (scale_weight * new_peak_value > peak_value) {
             res = new_res;
-            peak_value = new_peak_value;
             _scale *= scale_step;
             _roi.width *= scale_step;
             _roi.height *= scale_step;
+
+            peak_value = new_peak_value;
+            mean_peak_value = new_mean_peak_value;
+            mean_apce_value = new_mean_apce_value;
+            current_apce_value = new_current_apce_value;
+            apce_accepted = new_apce_accepted;
         }
     }
 
@@ -159,7 +180,7 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
     /* APCE. */
     if(apce_accepted == true){
 
-        cv::Mat x = getFeatures(image, 0);
+        cv::Mat x = getFeatures(image, 0, appearance);
         train(x, interp_factor);
     }
 
@@ -312,7 +333,7 @@ cv::Mat KCFTracker::createGaussianPeak(int sizey, int sizex)
 }
 
 // Obtain sub-window from image, with replication-padding and extract features
-cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, float scale_adjust)
+cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, cv::Mat& appearance, float scale_adjust)
 {
     cv::Rect extracted_roi;
 
@@ -367,7 +388,7 @@ cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, float scal
     extracted_roi.x = cx - extracted_roi.width / 2;
     extracted_roi.y = cy - extracted_roi.height / 2;
 
-    cv::Mat FeaturesMap;  
+    cv::Mat FeaturesMap;
     cv::Mat z = RectTools::subwindow(image, extracted_roi, cv::BORDER_REPLICATE);
     
     if (z.cols != _tmpl_sz.width || z.rows != _tmpl_sz.height) {
@@ -447,6 +468,9 @@ cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, float scal
     if (inithann) {
         createHanningMats();
     }
+
+    FeaturesMap.copyTo(appearance);
+
     FeaturesMap = hann.mul(FeaturesMap);
     return FeaturesMap;
 }

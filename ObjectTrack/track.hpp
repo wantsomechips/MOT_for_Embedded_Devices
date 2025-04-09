@@ -13,7 +13,7 @@
 #define TCR_RUNN (0x01 << 2)
 /* Sub-state of TCR_RUNN, represents how many detections needed 
    to  confirm a newly detected object. */
-#define TCR_RUNN_3 (TCR_RUNN + 3)
+#define TCR_RUNN_3 (TCR_RUNN + 2)
 /* Ready to use. */
 #define TCR_READY (0x01 << 3)
 /* Object lost. */
@@ -42,15 +42,18 @@ public:
 
     bool update(Mat& frame);
 
-    bool restart(Mat first_f, Rect roi, char _state = TCR_RUNN_3, 
+    bool restart(Mat first_f, Rect roi, char _state = TCR_RUNN, 
         bool hog = true, bool fixed_window = true, bool multiscale = true, 
         bool lab = true);
+    
+    bool updateAppearance(const Mat& new_appearance);
 
     bool isSameObject(const Rect& bbox) const;
     Rect getROI(void) const;
     float getScore(void) const;
     float getApce(void) const;
     float getPeak(void) const;
+    Mat getAppearance(void) const;
     bool apceIsAccepted(void) const;
 
     /* 8 bit. */
@@ -63,6 +66,8 @@ protected:
     float _min_iou_req;
 
     float _score = 0;
+
+    Mat _appearance = Mat();
 
     /* APCE. */
     float _beta_1 = 0.5;
@@ -104,7 +109,7 @@ public:
 
     bool tick(Mat& frame, vector<fdObject> fd_objs = {});
 
-    Mat getCostMatrix(const vector<fdObject>& fd_objs);
+    bool getCostMatrix(const Mat& frame, const vector<fdObject>& fd_objs, Mat& cost);
     bool hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, vector<int>& matched_tcr_index);
 
     int tcrFullHandler(void);
@@ -113,6 +118,8 @@ public:
 
     vector<Rect> getROIs(void) const;
     bool addBackgrndResp(Mat backgrnd_resp);
+
+    Mat getFeature(const Rect roi, const Mat& frame);
 
 
     const int max_tcr;

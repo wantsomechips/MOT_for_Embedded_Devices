@@ -13,11 +13,11 @@ public:
     // Constructor
     KCFTracker(bool hog, bool fixed_window, bool multiscale, bool lab);
     // Initialize tracker 
-    virtual void init(const cv::Rect &roi, cv::Mat image);
+    virtual void init(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance);
     
     // Update position based on the new frame
     virtual cv::Rect update(cv::Mat image, float beta_1, float beta_2, float alpha_apce, float& peak_value,  
-        float& mean_peak_value, float& mean_apce_value, float& current_apce_value, bool& apce_accepted);
+        float& mean_peak_value, float& mean_apce_value, float& current_apce_value, bool& apce_accepted, cv::Mat& appearance);
 
     float interp_factor; // linear interpolation factor for adaptation
     float sigma; // gaussian kernel bandwidth
@@ -30,6 +30,7 @@ public:
     float scale_step; // scale step for multi-scale estimation
     float scale_weight;  // to downweight detection scores of other scales for added stability
 
+    bool getRoiFeature(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance);
 
 protected:
     // Detect object in the current frame.
@@ -47,7 +48,7 @@ protected:
     cv::Mat createGaussianPeak(int sizey, int sizex);
 
     // Obtain sub-window from image, with replication-padding and extract features
-    cv::Mat getFeatures(const cv::Mat & image, bool inithann, float scale_adjust = 1.0f);
+    cv::Mat getFeatures(const cv::Mat & image, bool inithann, cv::Mat& appearance, float scale_adjust = 1.0f);
 
     // Initialize Hanning window. Function called only in the first frame.
     void createHanningMats();

@@ -21,7 +21,10 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
         return true;
     }
 
-    Mat cost = getCostMatrix(fd_objs);
+    Mat cost;
+    if(getCostMatrix(frame, fd_objs, cost) == false){
+
+    }
 
     vector<int> matched_tcr_index;
     hungarianMatch(fd_objs, cost, matched_tcr_index);
@@ -33,29 +36,19 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
 
     vector<bool> tcr_matched(max_tcr, false);
+
     int n = fd_objs.size();
 
     for(int i = 0; i < n; ++ i){
-        if(matched_tcr_index[i] != INVAILD_INDEX){
-            tcr_matched[ matched_tcr_index[i] ] = true;
-            Tracking& cur_tcr = _p_tcrs[ matched_tcr_index[i] ];
+        int index = matched_tcr_index[i];
+        if(index != INVAILD_INDEX){
 
-            /* Re-start KCF with new Rect if it's more reliable. */
-            if((cur_tcr.state & TCR_RUNN) && (cur_tcr.state != TCR_RUNN)){
-                -- cur_tcr.state;
-                Rect kcf_rect = cur_tcr.getROI();
-                Rect fd_rect = fd_objs[i].resultRect();
+            tcr_matched[ index ] = true;
+            Tracking& cur_tcr = _p_tcrs[ index ];
 
-                if(fd_rect.area() > 0.8f * kcf_rect.area() 
-                    && fd_rect.area() < 1.3f * kcf_rect.area()){
-
-                    cur_tcr.restart(frame, fd_rect, cur_tcr.state);
-                }
-            }
-            else{
-                cur_tcr.state = TCR_RUNN;
-                cur_tcr.update(frame);
-            }
+            cur_tcr.state = TCR_RUNN;
+            cur_tcr.update(frame);
+        
         }
         else{
             int index = getFreeTcrIndex();
@@ -69,21 +62,16 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
         }
     }
 
-    /* If it's a static object. */
+    /* Exempt specific objects. */
     for(int i = 0; i < max_tcr; ++ i){
         Tracking& cur_tcr = _p_tcrs[i];
 
-        if((cur_tcr.state & TCR_RUNN) && (tcr_matched[i] == false)){
-            Rect roi = cur_tcr.getROI() & Rect(0,0, _backgrnd_resp.cols, _backgrnd_resp.rows);
-            Mat resp = _backgrnd_resp(roi);
-            int count = cv::countNonZero(resp);
-
-            cout << "DEBUG: count: " << count << " roi.area: " << roi.area() <<endl;
-
-            if(count > 0.6f * roi.area()){
-                tcr_matched[i] = true;
-                cur_tcr.update(frame);
-            }
+        /* Objects unmatched within few detections. */
+        if((cur_tcr.state & TCR_RUNN) && (tcr_matched[i] == false) 
+            && (cur_tcr.state < TCR_RUNN_3)){
+            ++ cur_tcr.state;
+            tcr_matched[i] = true;
+            cur_tcr.update(frame);
         }
     }
 
@@ -91,16 +79,8 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
         char& state = _p_tcrs[i].state;
 
-        if(state & TCR_RUNN){
-            if(tcr_matched[i] == false){
-                state = TCR_LOST_3;
-            }
-        }
-        else if(state == TCR_LOST){
-            state = TCR_READY;
-        }
-        else if(state & TCR_LOST){
-            -- state;
+        if((state & TCR_RUNN) && (tcr_matched[i] == false)){
+                state = TCR_LOST;
         }
     }
 
@@ -108,20 +88,16 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
 }
 
-Mat objTrack::getCostMatrix(const vector<fdObject>& fd_objs){
-    Mat cost(Size(fd_objs.size(), max_tcr), CV_32FC1, cv::Scalar(1.0f));
-
-    int tcr_counter = 0;
+bool objTrack::getCostMatrix(const Mat& frame, const vector<fdObject>& fd_objs, Mat& cost){
+    cost = std::move( Mat(Size(fd_objs.size(), max_tcr), CV_32FC1, cv::Scalar(1.0f)));
 
     /* Find the biggest APCE value and Peak value. */
-    float max_apce = 0.0f, max_peak = 0.0f;
+    float max_apce = 1.0f, max_peak = 1.0f;
     for(int i = 0; i < max_tcr; ++ i){
         const Tracking& cur_tcr = _p_tcrs[i];
         if((cur_tcr.state & TCR_RUNN) == 0x00){
             continue;
         }
-
-        ++ tcr_counter;
 
         float apce = cur_tcr.getApce();
         float peak = cur_tcr.getPeak();
@@ -134,33 +110,50 @@ Mat objTrack::getCostMatrix(const vector<fdObject>& fd_objs){
         }
     }
 
-    if(tcr_counter == 0){
-        return cost;
-    }
-
     /* Calculate costs. */
     for(int y = 0; y < max_tcr; ++ y){
 
         const Tracking& cur_tcr = _p_tcrs[y];
+
         if((cur_tcr.state & (TCR_RUNN | TCR_LOST)) == 0x00){
             continue;
         }
 
-        float kcf_score, iou;
+        float resp_score, iou, max_iou_needed = 0.7f;
+        float appearance_score = 1.0f, max_appear_score_allowed = 0.5f;
+
         if(cur_tcr.apceIsAccepted()){
-            kcf_score = 0.5f * cur_tcr.getApce() / max_apce + 0.5f * cur_tcr.getPeak() / max_peak;
+            resp_score = 0.5f * cur_tcr.getApce() / max_apce + 0.5f * cur_tcr.getPeak() / max_peak;
         }
         else{
-            kcf_score = 0.0f;
+            resp_score = 0.0f;
         }
 
         for(int x = 0; x < fd_objs.size(); ++ x){
-            iou = func::IoU(cur_tcr.getROI(), fd_objs[x].resultRect());
-            cost.at<float>(y,x) = 0.6f * (1.0f - iou) + 0.4f * (1.0f - kcf_score);
+            Rect fd_roi = fd_objs[x].resultRect();
+
+            Mat roi_appearance = getFeature(fd_roi, frame);
+
+            Mat tcr_appearance = cur_tcr.getAppearance();
+
+            cv::reduce(roi_appearance , roi_appearance , 1, cv::REDUCE_AVG);
+            cv::reduce(tcr_appearance, tcr_appearance, 1, cv::REDUCE_AVG);
+
+            appearance_score = cv::norm(tcr_appearance, roi_appearance, cv::NORM_L2);
+
+            // cout << "DEBUG : Appearance L2: " << l2 <<endl;
+
+            iou = func::IoU(cur_tcr.getROI(), fd_roi);
+
+            /* Truncate. */
+            appearance_score = (appearance_score > max_appear_score_allowed)? 1.0f : appearance_score / max_appear_score_allowed ;
+            iou = (iou > max_iou_needed)? 1.0f : iou;
+
+            cost.at<float>(y,x) = 0.6f * (1.0f - iou) + 0.4f * appearance_score;
         }
     }
 
-    return cost;
+    return true;
 }
 
 bool objTrack::hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, vector<int>& matched_tcr_index){
@@ -182,6 +175,9 @@ bool objTrack::hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, 
         }
     }
 
+    /* CLose to the cost then IoU = 0, 
+       which is allowing trackers in `TCR_LOST` could resume. */
+    float biggest_cost_allowed = 0.7f;
     while(true){
         /* Bigger than maximum cost `1.0f`.*/
         float best_cost = 2.0f;
@@ -195,7 +191,7 @@ bool objTrack::hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, 
                 if(obj_used[x]) continue;
                 float _cost = cost.at<float>(y, x);
 
-                if(_cost > 0.7f) continue;
+                if(_cost > biggest_cost_allowed) continue;
 
                 if(_cost < best_cost){
                     best_cost = _cost;
@@ -205,7 +201,7 @@ bool objTrack::hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, 
             }
         }
 
-        if(best_x == -1) break;
+        if(best_x == -1 || best_y == -1) break;
 
         matched_tcr_index[best_x] = best_y;
 
@@ -236,11 +232,13 @@ vector<Rect> objTrack::getROIs(void) const{
 bool Tracking::update(Mat& frame){
 
     Rect bbox;
+    Mat new_appearance;
     bbox = _p_kcf -> update(frame, _beta_1, _beta_2, _alpha_apce, _peak_value, _mean_peak_value, 
-                            _mean_apce_value, _current_apce_value, _apce_accepted);
+                            _mean_apce_value, _current_apce_value, _apce_accepted, new_appearance);
     _roi = bbox;
 
     if(_apce_accepted){
+        updateAppearance(new_appearance);
         _score = 1000.0f + _current_apce_value + _peak_value;
     }
     else{
@@ -289,10 +287,15 @@ int objTrack::tcrFullHandler(void){
 
 int objTrack::getFreeTcrIndex(void){
 
-    for(int i = 0;i < max_tcr; i++){
-
-        if(_p_tcrs[i].state == TCR_READY){
+    for(int i = 0;i < max_tcr; ++ i){        
+        if(_p_tcrs[i].state & TCR_READY){
             
+            return i;
+        }
+    }
+
+    for(int i = 0;i < max_tcr; ++ i){
+        if(_p_tcrs[i].state & TCR_LOST){
             return i;
         }
     }
@@ -313,7 +316,17 @@ bool Tracking::restart(Mat first_f, Rect roi, char _state, bool hog,
     state = _state;
     if(_p_kcf != nullptr) delete _p_kcf;
     _p_kcf = new KCFTracker(hog, fixed_window, multiscale, lab);
-    _p_kcf -> init(roi,first_f);
+    _p_kcf -> init(roi, first_f, _appearance);
+
+    return true;
+}
+
+bool Tracking::updateAppearance(const Mat& new_appearance){
+
+    float alpha = 0.075f;
+    _appearance = (1.0f - alpha) * _appearance + alpha * new_appearance;
+
+    // cout << "DEBUG:: Appearance: " << _appearance.rows << " " << _appearance.cols << endl << endl << endl;
 
     return true;
 }
@@ -334,6 +347,11 @@ Rect Tracking::getROI(void) const{
     return _roi;
 }
 
+
+Mat Tracking::getAppearance(void) const{
+    return _appearance;
+}
+
 float Tracking::getApce(void) const{
     return _current_apce_value;
 }
@@ -350,3 +368,13 @@ bool Tracking::apceIsAccepted(void) const{
 
 
 
+Mat objTrack::getFeature(const Rect roi, const Mat& frame){
+    bool hog = true, fixed_window = true;
+    bool multiscale = true, lab = true;
+
+    static KCFTracker tmp_kcf(hog, fixed_window, multiscale, lab);
+    Mat appearance;
+    tmp_kcf.getRoiFeature(roi, frame, appearance);
+
+    return appearance;
+}

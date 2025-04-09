@@ -59,10 +59,7 @@ bool func::MOT(string input){
             detect -> addTrackedObjs( track -> getROIs());
         }
 
-        cv::imshow(string("Test Set: ") + NAME,frame);
-
-        cv::waitKey();
-        
+        cv::imshow(string("Test Set: ") + NAME,frame);        
 
         /* Press `ESC` to quit. */
         if (cv::waitKey(1000 / frameRate) == 27){
@@ -104,14 +101,13 @@ float func::IoU(const Rect& bbox_a, const Rect& bbox_b){
     double inter_area_ratio = 1.0f * inter_area / std::min(bbox_a.area(), bbox_b.area());
 
     /* Believe that it's just a fragment caused by occlusion. */
-
     float iou = 1.0f * inter_area / (bbox_a.area() + bbox_b.area() - inter_area);
 
     /* Return 1.0 only when one bbox is included in the other. */
-    if(inter_area_ratio > 0.8f && iou < MIN_IOU_REQ){
+    // if(inter_area_ratio > 0.8f && iou < MIN_IOU_REQ){
 
-        return 1.0f;
-    }
+    //     return 1.0f;
+    // }
     
     return iou;
 }

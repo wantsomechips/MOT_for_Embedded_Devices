@@ -29,11 +29,6 @@ bool fdObject::isSameObject(const Rect& bbox) const{
 
     float iou = func::IoU(_result,bbox);
 
-    /* If one bbox is included in the other. */
-    if((1.0f - iou) < 1e-3f) {
-
-        return false;
-    }
     // cout << "DEBUG: fdObject::isSameObject - IOU: "<< iou <<endl;
 
     return (iou > _min_iou_req);
@@ -140,7 +135,6 @@ bool objDetect::tick(const Mat& frame){
     
     /* Kernel for morphology operations. */
     Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-    Mat mid_kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(6,6));
     Mat big_kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(9,9));
 
     /* 3 Frames Difference after collecting two 2FD. */
@@ -160,9 +154,13 @@ bool objDetect::tick(const Mat& frame){
         Mat& backgrnd_resp = _backgrnd_resp[round];
         cv::threshold(backgrnd_diff, backgrnd_resp, BAKCGRND_THRESHOLD, 255, cv::THRESH_BINARY);
 
-        // cv::morphologyEx(backgrnd_resp, backgrnd_resp,cv::MORPH_CLOSE, kernel);
+        Mat _kernel = cv::getStructuringElement(cv::MORPH_CROSS,cv::Size(3,3));
+        cv::morphologyEx(backgrnd_resp, backgrnd_resp,cv::MORPH_OPEN, _kernel);
 
-        cv::morphologyEx(_three_fd_resp, _three_fd_resp,cv::MORPH_OPEN, kernel);
+        _kernel = cv::getStructuringElement(cv::MORPH_CROSS,cv::Size(6,6));
+        cv::morphologyEx(backgrnd_resp, backgrnd_resp,cv::MORPH_CLOSE, _kernel);
+
+        // cv::morphologyEx(_three_fd_resp, _three_fd_resp,cv::MORPH_OPEN, kernel);
         cv::morphologyEx(_three_fd_resp, _three_fd_resp,cv::MORPH_DILATE, big_kernel);
 
     }
@@ -220,16 +218,13 @@ Mat objDetect::getFinalResp(){
     }
 
 
-    imshow("3FD_diff", _three_fd_resp);
-    // imshow("2FD_diff1", _fd_resp[0]);
-    // imshow("2FD_diff2", _fd_resp[1]);
-    if(_backgrnd_initialized){
-        // imshow("backgrnd_resp_1", _backgrnd_resp[0]);
-        imshow("backgrnd_resp_2", _backgrnd_resp[1]);
-    }
-    imshow("final_resp", final_resp);
+    // imshow("3FD_diff", _three_fd_resp);
+    // if(_backgrnd_initialized){
+    //     imshow("backgrnd_resp_2", _backgrnd_resp[1]);
+    // }
+    // imshow("final_resp", final_resp);
     
-    cv::waitKey();
+    // cv::waitKey();
 
     return final_resp;
 
@@ -422,7 +417,7 @@ vector<Rect> objDetect::getRects(Mat resp) {
 
         Rect bbox = cv::boundingRect(contour);
         
-        if (bbox.area() > MIN_BBOX_SIZE) { 
+        if (bbox.height > MIN_BBOX_HEIGHT && bbox.width > MIN_BBOX_WIDTH) { 
             objects.push_back(bbox);
         }
     }

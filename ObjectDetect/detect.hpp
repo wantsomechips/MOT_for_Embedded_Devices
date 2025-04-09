@@ -11,17 +11,14 @@ using std::vector;
 /* Frame Difference threshold. */
 #define FD_THRESHOLD (15)
 #define BAKCGRND_THRESHOLD (35)
-#define MIN_BBOX_SIZE (500)
+#define MIN_BBOX_HEIGHT (20)
+#define MIN_BBOX_WIDTH (10)
 
 /* Detect Objects every DETEC_INTV frames. */
 #define DETEC_INTV (2)
 
 /* Miminum frames number requirement for detection. */
 #define MIN_DETEC_FRM_REQ ( DETEC_INTV / 2 + 1)
-
-
-class fdObject;
-class objectDetect;
 
 
 class fdObject{
@@ -73,7 +70,7 @@ public:
             throw std::runtime_error("ERR:Period must greater than 1");
         }
 
-        _clock_bound =  0xFFFFFFF0 + _period;
+        _clock_bound =  0xFFF0 + _period;
 
         _clock = _period;
 
@@ -138,8 +135,9 @@ protected:
     float _alpha = 0.1;    
 
     const int _period;
-    unsigned int  _clock = 0;
-    unsigned int _clock_bound = 0;
+    /* 16 bits. */
+    unsigned short  _clock = 0;
+    unsigned short _clock_bound = 0;
 
 };
 

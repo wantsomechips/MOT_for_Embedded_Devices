@@ -22,7 +22,7 @@ using cv::Mat, cv::Rect, cv::Point, cv::Size;
 /* seqinfo.ini of test set. */
 #define NAME "PETS09-S2L1"
 #define imDir "img1"
-#define frameRate 1
+#define frameRate 10
 #define seqLength 795
 #define imWidth 768
 #define imHeight 576
