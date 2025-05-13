@@ -87,11 +87,11 @@ KCFTracker::KCFTracker(bool hog, bool fixed_window, bool multiscale, bool lab)
 }
 
 // Initialize tracker 
-void KCFTracker::init(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance)
+void KCFTracker::init(const cv::Rect &roi, cv::Mat image)
 {
     _roi = roi;
     assert(roi.width >= 0 && roi.height >= 0);
-    _tmpl = getFeatures(image, 1, appearance);
+    _tmpl = getFeatures(image, 1);
     _prob = createGaussianPeak(size_patch[0], size_patch[1]);
     _alphaf = cv::Mat(size_patch[0], size_patch[1], CV_32FC2, float(0));
     //_num = cv::Mat(size_patch[0], size_patch[1], CV_32FC2, float(0));
@@ -99,16 +99,108 @@ void KCFTracker::init(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance)
     train(_tmpl, 1.0); // train with initial frame
  }
 
-bool KCFTracker::getRoiFeature(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance){
+
+bool KCFTracker::getRoiFeature(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance, cv::Size tmpl_sz, float scale, float adjust) {
+    
     _roi = roi;
-    assert(roi.width >= 0 && roi.height >= 0);
-    getFeatures(image, 1, appearance);
+
+    // 使用传入参数计算 extracted_roi
+    float cx = _roi.x + _roi.width / 2.0f;
+    float cy = _roi.y + _roi.height / 2.0f;
+
+    _tmpl_sz = tmpl_sz;  // 直接使用外部指定的 tmpl_sz
+    _scale = scale;
+
+    cv::Rect extracted_roi;
+    extracted_roi.width = adjust * _scale * _tmpl_sz.width;
+    extracted_roi.height = adjust * _scale * _tmpl_sz.height;
+    extracted_roi.x = cx - extracted_roi.width / 2.0f;
+    extracted_roi.y = cy - extracted_roi.height / 2.0f;
+
+    // 提取图像补边
+    cv::Mat z = RectTools::subwindow(image, extracted_roi, cv::BORDER_REPLICATE);
+
+    // 缩放到目标模板尺寸（注意是像素单位）
+    if (z.cols != _tmpl_sz.width || z.rows != _tmpl_sz.height) {
+        cv::resize(z, z, _tmpl_sz);
+    }
+
+    // 提取特征图
+    cv::Mat FeaturesMap;
+
+    if (_hogfeatures) {
+        IplImage z_ipl = cvIplImage(z);
+        CvLSVMFeatureMapCaskade *map;
+        getFeatureMaps(&z_ipl, cell_size, &map);
+        normalizeAndTruncate(map, 0.2f);
+        PCAFeatureMaps(map);
+
+        size_patch[0] = map->sizeY;
+        size_patch[1] = map->sizeX;
+        size_patch[2] = map->numFeatures;
+
+        FeaturesMap = cv::Mat(cv::Size(map->numFeatures, map->sizeX * map->sizeY), CV_32F, map->map).t();
+        freeFeatureMapObject(&map);
+
+        // Lab 特征（可选）
+        if (_labfeatures) {
+            cv::Mat imgLab;
+            cvtColor(z, imgLab, CV_BGR2Lab);
+            unsigned char *input = imgLab.data;
+
+            cv::Mat outputLab = cv::Mat(_labCentroids.rows, size_patch[0] * size_patch[1], CV_32F, float(0));
+            int cntCell = 0;
+
+            for (int cY = cell_size; cY < z.rows - cell_size; cY += cell_size) {
+                for (int cX = cell_size; cX < z.cols - cell_size; cX += cell_size) {
+                    for (int y = cY; y < cY + cell_size; ++y) {
+                        for (int x = cX; x < cX + cell_size; ++x) {
+                            float l = (float)input[(z.cols * y + x) * 3];
+                            float a = (float)input[(z.cols * y + x) * 3 + 1];
+                            float b = (float)input[(z.cols * y + x) * 3 + 2];
+
+                            float minDist = FLT_MAX;
+                            int minIdx = 0;
+                            float *centroid = (float*)_labCentroids.data;
+                            for (int k = 0; k < _labCentroids.rows; ++k) {
+                                float dist = std::pow(l - centroid[3 * k], 2) + std::pow(a - centroid[3 * k + 1], 2) 
+                                                + std::pow(b - centroid[3 * k + 2], 2);
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    minIdx = k;
+                                }
+                            }
+
+                            outputLab.at<float>(minIdx, cntCell) += 1.0f / cell_sizeQ;
+                        }
+                    }
+                    cntCell++;
+                }
+            }
+
+            size_patch[2] += _labCentroids.rows;
+            FeaturesMap.push_back(outputLab);
+        }
+    } 
+    else {
+        FeaturesMap = RectTools::getGrayImage(z);
+        FeaturesMap -= 0.5f;
+        size_patch[0] = z.rows;
+        size_patch[1] = z.cols;
+        size_patch[2] = 1;
+    }
+
+    createHanningMats();
+    FeaturesMap = hann.mul(FeaturesMap);
+
+    appearance = std::move(FeaturesMap);
     return true;
 }
 
+
 // Update position based on the new frame
 cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alpha_apce, float& peak_value,  
-    float& mean_peak_value, float& mean_apce_value, float& current_apce_value, bool& apce_accepted, cv::Mat& appearance)
+    float& mean_peak_value, float& mean_apce_value, float& current_apce_value, bool& apce_accepted)
 {
     if (_roi.x + _roi.width <= 0) _roi.x = -_roi.width + 1;
     if (_roi.y + _roi.height <= 0) _roi.y = -_roi.height + 1;
@@ -119,10 +211,12 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
     float cy = _roi.y + _roi.height / 2.0f;
 
 
-    cv::Mat appearance_place_holder;
 
-    cv::Point2f res = detect(_tmpl, getFeatures(image, 0, appearance_place_holder, 1.0f), peak_value, beta_1, beta_2, 
+    cv::Point2f res = detect(_tmpl, getFeatures(image, 0, 1.0f), peak_value, beta_1, beta_2, 
             alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
+
+    latest_scale = _scale;
+    latest_adjust = 1.0f;
 
     if (scale_step != 1) {
         // Test at a smaller _scale
@@ -130,10 +224,13 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
         float new_mean_peak_value, new_mean_apce_value, new_current_apce_value;
         bool new_apce_accepted;
 
-        cv::Point2f new_res = detect(_tmpl, getFeatures(image, 0, appearance_place_holder, 1.0f / scale_step), new_peak_value,
+        
+
+        cv::Point2f new_res = detect(_tmpl, getFeatures(image, 0, 1.0f / scale_step), new_peak_value,
             beta_1, beta_2, alpha_apce, new_mean_peak_value, new_mean_apce_value, new_current_apce_value, new_apce_accepted);
 
         if (scale_weight * new_peak_value > peak_value) {
+
             res = new_res;
             _scale /= scale_step;
             _roi.width /= scale_step;
@@ -144,14 +241,18 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
             mean_apce_value = new_mean_apce_value;
             current_apce_value = new_current_apce_value;
             apce_accepted = new_apce_accepted;
+
+            latest_scale = _scale;
+            latest_adjust = 1.0f / scale_step;
         }
 
         // Test at a bigger _scale
-        new_res = detect(_tmpl, getFeatures(image, 0, appearance_place_holder, scale_step), new_peak_value, beta_1, beta_2, 
+        new_res = detect(_tmpl, getFeatures(image, 0, scale_step), new_peak_value, beta_1, beta_2, 
             alpha_apce, new_mean_peak_value, new_mean_apce_value, new_current_apce_value, new_apce_accepted);
 
 
         if (scale_weight * new_peak_value > peak_value) {
+
             res = new_res;
             _scale *= scale_step;
             _roi.width *= scale_step;
@@ -162,6 +263,9 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
             mean_apce_value = new_mean_apce_value;
             current_apce_value = new_current_apce_value;
             apce_accepted = new_apce_accepted;
+
+            latest_scale = _scale;
+            latest_adjust = scale_step;
         }
     }
 
@@ -177,10 +281,12 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
 
     assert(_roi.width >= 0 && _roi.height >= 0);
 
+
+    cv::Mat x = getFeatures(image, 0);
+
     /* APCE. */
     if(apce_accepted == true){
 
-        cv::Mat x = getFeatures(image, 0, appearance);
         train(x, interp_factor);
     }
 
@@ -333,7 +439,7 @@ cv::Mat KCFTracker::createGaussianPeak(int sizey, int sizex)
 }
 
 // Obtain sub-window from image, with replication-padding and extract features
-cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, cv::Mat& appearance, float scale_adjust)
+cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, float scale_adjust)
 {
     cv::Rect extracted_roi;
 
@@ -384,12 +490,18 @@ cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, cv::Mat& a
     extracted_roi.width = scale_adjust * _scale * _tmpl_sz.width;
     extracted_roi.height = scale_adjust * _scale * _tmpl_sz.height;
 
+    // std::cout << "before" << _tmpl_sz << scale_adjust << " "<<_scale << std::endl;
+
+    // std::cout << "after" << extracted_roi << std::endl;
+
     // center roi with new size
     extracted_roi.x = cx - extracted_roi.width / 2;
     extracted_roi.y = cy - extracted_roi.height / 2;
 
+
     cv::Mat FeaturesMap;
     cv::Mat z = RectTools::subwindow(image, extracted_roi, cv::BORDER_REPLICATE);
+
     
     if (z.cols != _tmpl_sz.width || z.rows != _tmpl_sz.height) {
         cv::resize(z, z, _tmpl_sz);
@@ -405,6 +517,7 @@ cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, cv::Mat& a
         size_patch[0] = map->sizeY;
         size_patch[1] = map->sizeX;
         size_patch[2] = map->numFeatures;
+
 
         FeaturesMap = cv::Mat(cv::Size(map->numFeatures,map->sizeX*map->sizeY), CV_32F, map->map);  // Procedure do deal with cv::Mat multichannel bug
         FeaturesMap = FeaturesMap.t();
@@ -469,9 +582,10 @@ cv::Mat KCFTracker::getFeatures(const cv::Mat & image, bool inithann, cv::Mat& a
         createHanningMats();
     }
 
-    FeaturesMap.copyTo(appearance);
-
     FeaturesMap = hann.mul(FeaturesMap);
+
+    // std:: cout << "DONE" << std::endl;
+    
     return FeaturesMap;
 }
     

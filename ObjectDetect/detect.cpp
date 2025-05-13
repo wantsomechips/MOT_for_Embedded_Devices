@@ -27,9 +27,7 @@ Rect fdObject::resultRect(void) const{
 
 bool fdObject::isSameObject(const Rect& bbox) const{
 
-    float iou = func::IoU(_result,bbox);
-
-    // cout << "DEBUG: fdObject::isSameObject - IOU: "<< iou <<endl;
+    float iou = func::IoU(_result, bbox);
 
     return (iou > _min_iou_req);
 }
@@ -77,7 +75,7 @@ bool fdObject::getResult(){
         }
 
         /* Boundry check. Could be empty! */
-        _result = Rect(tl_x, tl_y, (br_x - tl_x), (br_y - tl_y)) & _image_rect;
+        // _result = Rect(tl_x, tl_y, (br_x - tl_x), (br_y - tl_y)) & _image_rect;
 
         if(_result.empty()){
            
@@ -96,109 +94,142 @@ bool fdObject::getResult(){
 
 bool objDetect::tick(const Mat& frame){
 
-    int round = _clock % _period;
-
-    cv::cvtColor(frame, _p_frms[round], cv::COLOR_BGR2GRAY);
-
-    Mat& pre_frame = _p_frms[(_clock -1) % _period];
-    Mat& cur_frame = _p_frms[round];
-
     /* Use frame.clone() or copyTo() to Deep Copy. Otherwise it would be Shallow Copy. */
-    if(_clock < _clock_bound){
-        ++ _clock;
-    }
-    else {
-        _clock = 0;
+
+    /* Handle Underflow. Do it explicitly. */
+    Mat& pre_frame = _p_frms[((_clock - 1 + FRM_BUFFER_SIZE) % FRM_BUFFER_SIZE)];
+    Mat& cur_frame = _p_frms[(_clock % FRM_BUFFER_SIZE)];
+    cv::cvtColor(frame, cur_frame, cv::COLOR_BGR2GRAY);
+
+
+    ++ _clock;
+    /* Handle Overflow. Although compiler will handle it, do it explicitly. */
+    _clock = (_clock % UINT_FAST32_MAX);
+
+    /* Model background every frame. */
+    if(_backgrnd_initialized == false){
+        /* 2 Frames Difference. */
+        /* Remove noise. */
+        Mat cur_frm_blur, pre_frm_blur;
+        cv::medianBlur(cur_frame,cur_frm_blur, 5);
+        cv::medianBlur(pre_frame,pre_frm_blur, 5);
+
+        Mat fd_diff;
+        cv::absdiff(cur_frm_blur, pre_frm_blur, fd_diff);
+
+        cv::threshold(fd_diff, _fd_resp, FD_THRESHOLD, 255, cv::THRESH_BINARY);
+    
+
+        /* Process response, get detected objects. */
+        Rect image_rect(Point(0,0),Size(cur_frame.cols,cur_frame.rows));
+    
+        Mat bigger_kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(9,9));
+        cv::morphologyEx(_fd_resp, _fd_resp,cv::MORPH_CLOSE, bigger_kernel);
+
+
+        vector<Rect> obj_rects = getRects(_fd_resp);
+
+        backgrndUpdate(cur_frame, obj_rects);
+    
     }
 
-    /* Only process the first 2 frames per period. */
-    if(round > 1){
+
+    /* Only process once per period. */
+    if((_clock % _period) > 0U){
 
         return false;
     }
 
-    /* Run 3 Frames Difference and process results at the second frame. */
-    bool run_three_frm_diff = (round == 1);
-    bool get_result = (round == 1);
-
-    /* 2 Frames Difference. */
-    /* Remove noise. */
-    Mat cur_frm_blur, pre_frm_blur;
-    cv::medianBlur(cur_frame,cur_frm_blur, 5);
-    cv::medianBlur(pre_frame,pre_frm_blur, 5);
-
-    Mat& two_fd_diff = _fd_diff[round];
-    cv::absdiff(cur_frm_blur, pre_frm_blur, two_fd_diff);
-
-    Mat& two_fd_resp = _fd_resp[round];
-    cv::threshold(two_fd_diff, two_fd_resp, FD_THRESHOLD, 255, cv::THRESH_BINARY);
-    
-    /* Kernel for morphology operations. */
-    Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-    Mat big_kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(9,9));
-
-    /* 3 Frames Difference after collecting two 2FD. */
-    if(run_three_frm_diff){
-        Mat three_fd_diff;
-        cv::bitwise_or(_fd_diff[0], _fd_diff[1], three_fd_diff);
-        cv::threshold(three_fd_diff, _three_fd_resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
-    }
-    
-
     /* Background Frame Difference. */
     if(_backgrnd_initialized){
 
-        Mat backgrnd_diff;
-        cv::absdiff(cur_frame, _backgrnd_i, backgrnd_diff);
-        
-        Mat& backgrnd_resp = _backgrnd_resp[round];
-        cv::threshold(backgrnd_diff, backgrnd_resp, BAKCGRND_THRESHOLD, 255, cv::THRESH_BINARY);
+        Mat backgrnd_diff, kernel;
+        cv::absdiff(cur_frame, _backgrnd, backgrnd_diff);
 
-        Mat _kernel = cv::getStructuringElement(cv::MORPH_CROSS,cv::Size(3,3));
-        cv::morphologyEx(backgrnd_resp, backgrnd_resp,cv::MORPH_OPEN, _kernel);
+        Mat final_resp;
 
-        _kernel = cv::getStructuringElement(cv::MORPH_CROSS,cv::Size(6,6));
-        cv::morphologyEx(backgrnd_resp, backgrnd_resp,cv::MORPH_CLOSE, _kernel);
+        bool getResp = getBackgrndDiffResp(cur_frame, final_resp);
 
-        // cv::morphologyEx(_three_fd_resp, _three_fd_resp,cv::MORPH_OPEN, kernel);
-        cv::morphologyEx(_three_fd_resp, _three_fd_resp,cv::MORPH_DILATE, big_kernel);
+        vector<Rect> obj_rects = getRects(final_resp);
+        backgrndUpdate(cur_frame, obj_rects);
+
+        for(const Rect& obj_rect: obj_rects){
+
+            _objs.push_back(fdObject(obj_rect));
+        }
+
 
     }
+    else{
+        vector<Rect> obj_rects = getRects(_fd_resp);
+        
+        for(const Rect& obj_rect: obj_rects){
 
-    cv::morphologyEx(two_fd_resp, two_fd_resp,cv::MORPH_CLOSE,big_kernel);
- 
-    /* Get objects base on 2FD. This is used to supplement the final result. */
-    _fd_obj_rects[round] = getRects(two_fd_resp);
+            _objs.push_back(fdObject(obj_rect));
+        }
+    }
 
     /* Collect and return detected obejects. */
-    if(get_result){
-
-        Rect image_rect(Point(0,0),Size(cur_frame.cols,cur_frame.rows));
-
-        Mat final_resp = getFinalResp();
-
-        cv::morphologyEx(final_resp, final_resp,cv::MORPH_CLOSE, kernel);
-
-
-        vector<Rect> final_obj_rects = getRects(final_resp);
-
-        for(const Rect& obj_rect: final_obj_rects){
-
-            _objs.push_back(fdObject(obj_rect, image_rect));
-        }
-
-
-        this -> backgrndUpdate(cur_frame);
-
-        if(_objs.size() != 0){
-            /* Get _objs prepared for next detection. */
-            _res = std::move(_objs);
-            return true;
-        }
+    if(_objs.size() != 0){
+        /* Get _objs prepared for next detection. */
+        _res = std::move(_objs);
+        return true;
     }
+
+
 
     return false;
 }
+
+bool objDetect::getBackgrndDiffResp(const Mat& cur_frame, Mat& final_resp){
+    /* Kernele height should be an odd number. */
+    Mat backgrnd_diff;
+    cv::absdiff(cur_frame, _backgrnd, backgrnd_diff);
+
+    Mat high_thresh_resp, low_thresh_resp;
+
+    const Size kernel(1,20);
+    const int low_thresh = 15, high_thresh = 50, max_val = 255;
+
+    cv::threshold(backgrnd_diff, low_thresh_resp, low_thresh, max_val, cv::THRESH_BINARY);
+    cv::threshold(backgrnd_diff, high_thresh_resp, high_thresh, max_val, cv::THRESH_BINARY);
+
+    high_thresh_resp.copyTo(final_resp);
+
+    const int dx = (int)((kernel.width -1) / 2), dy = (int)((kernel.height -1) / 2);
+    const int y_max = cur_frame.rows, x_max = cur_frame.cols;
+
+    for(int y = 0; y < y_max; ++ y){
+        for(int x = 0; x < x_max; ++ x){
+            if((0 == high_thresh_resp.at<uchar>(y , x)) && (0 != low_thresh_resp.at<uchar>(y , x))){
+                /* Boundary check. */
+                const int x_from = MAX(x - dx, 0), x_to = MIN(x + dx, x_max);
+                const int y_from = MAX(y - dy, 0), y_to = MIN(y + dy, y_max);
+
+                bool finded = false;
+                for(int ky = y_from; ky <= y_to; ++ ky){
+                    if(finded) break;
+
+                    for(int kx = x_from; kx <= x_to; ++ kx){
+                        if(0 != high_thresh_resp.at<uchar>(ky , kx)){
+                            final_resp.at<uchar>(y, x) = max_val;
+                            finded = true;
+                            break;
+                        }
+                    }
+                }
+                
+            }
+        }
+    }
+
+    // imshow("final", final_resp);
+    // imshow("high", high_thresh_resp);
+    // imshow("low", low_thresh_resp);
+
+    return true;
+}
+
 
 
 Mat objDetect::getFinalResp(){
@@ -208,46 +239,34 @@ Mat objDetect::getFinalResp(){
 
     if(_backgrnd_initialized){
 
-        cv::bitwise_and(_backgrnd_resp[1], _three_fd_resp, final_resp);
-
+        final_resp = _backgrnd_resp;
     }
     else{
-
-        final_resp =  _fd_resp[1];
-
+        final_resp = _fd_resp;
     }
 
-
-    // imshow("3FD_diff", _three_fd_resp);
-    // if(_backgrnd_initialized){
-    //     imshow("backgrnd_resp_2", _backgrnd_resp[1]);
-    // }
-    // imshow("final_resp", final_resp);
-    
-    // cv::waitKey();
 
     return final_resp;
 
 }
 
-bool objDetect::backgrndUpdate(const Mat& frame){
+bool objDetect::backgrndUpdate(const Mat& frame, const vector<Rect>& obj_rects){
 
     float alpha = _alpha;
 
-    Mat mask = Mat(frame.size(), CV_8UC1, cv::Scalar(255));
-
     Rect image_rect(Point(0,0),Size(frame.cols,frame.rows));
 
+    Mat mask(frame.size(), CV_8UC1, cv::Scalar(255));
+
     /* Expand target Rects when calculating background mask.*/
-    float expand_ratio = 1.2;
+    float expand_ratio = 1.2f;
 
-    for(fdObject& obj:_objs){
+    for(const Rect& rec: obj_rects){
 
-        Rect rec = obj.resultRect();
-        Point center(rec.x + rec.width / 2.0, rec.y + rec.height / 2.0);
-
+        Point center(rec.x + rec.width / 2.0f, rec.y + rec.height / 2.0f);
+        
         Size new_size(rec.width * expand_ratio, rec.height * expand_ratio);
-        Point new_tl (center.x - 0.5 * new_size.width, center.y - 0.5 * new_size.height);
+        Point new_tl (center.x - 0.5f * new_size.width, center.y - 0.5f * new_size.height);
         Rect expanded_rect(new_tl, new_size);
         expanded_rect = expanded_rect & image_rect;
 
@@ -256,10 +275,10 @@ bool objDetect::backgrndUpdate(const Mat& frame){
 
     for(const Rect& rec: _tracked_ROIs){
 
-        Point center(rec.x + rec.width / 2.0, rec.y + rec.height / 2.0);
+        Point center(rec.x + rec.width / 2.0f, rec.y + rec.height / 2.0f);
         
         Size new_size(rec.width * expand_ratio, rec.height * expand_ratio);
-        Point new_tl (center.x - 0.5 * new_size.width, center.y - 0.5 * new_size.height);
+        Point new_tl (center.x - 0.5f * new_size.width, center.y - 0.5f * new_size.height);
         Rect expanded_rect(new_tl, new_size);
         expanded_rect = expanded_rect & image_rect;
 
@@ -276,17 +295,10 @@ bool objDetect::backgrndUpdate(const Mat& frame){
         }
 
         alpha = _alpha_init;
-
     }
 
-    Mat frame_f;
-    frame.convertTo(frame_f, CV_32FC1);
-
-    Mat new_backgrnd = (1.0 - alpha) * _backgrnd + alpha * frame_f;
+    Mat new_backgrnd = (1.0f - alpha) * _backgrnd + alpha * frame;
     new_backgrnd.copyTo(_backgrnd, mask);
-
-    _backgrnd.convertTo(_backgrnd_i, CV_8UC1);
-    // imshow("Bakcgrnd", _backgrnd_i);
 
     return true;
 
@@ -311,77 +323,17 @@ Calculate the response of 2 or 3 frames difference.
 
 --- --- --- --- --- --- --- --- --- */
 
-Mat objDetect::FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra , bool three_frame_diff){
+Mat objDetect::FramesDiff(const Mat& pre_fra, const Mat& cur_fra){
 
-    Mat cur_b, pre_b;
-    // cv::cvtColor(cur_fra, cur_g, cv::COLOR_BGR2GRAY);
-    // cv::cvtColor(pre_fra, pre_g, cv::COLOR_BGR2GRAY);
+    Mat cur_b, pre_b, resp;
 
     cv::medianBlur(cur_fra,cur_b, 5);
     cv::medianBlur(pre_fra,pre_b, 5);
 
-    Mat cur_pre_d;
-    cv::absdiff(cur_b, pre_b, cur_pre_d);
+    cv::absdiff(cur_b, pre_b, resp);
+    cv::threshold(resp, resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
 
-    Mat resp,res;
-
-    /* 2 Frames Difference. */
-    if(three_frame_diff == false){
-
-        cv::threshold(cur_pre_d, resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
-    }
-    /* 3 Frames Difference. */
-    else{
-
-        Mat pre_pp_d;
-        cv::absdiff(pre_fra, pp_fra, pre_pp_d);
-
-        Mat dd;
-        cv::bitwise_or(cur_pre_d, pre_pp_d, dd);
-
-        cv::threshold(dd, resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
-
-    }
- 
-    /* Morphology operations. */
-    Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-
-    if(_backgrnd_initialized){
-        /* Remove noise. */
-        kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-        cv::morphologyEx(resp, resp,cv::MORPH_OPEN,kernel);
-
-        kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(9,9));
-        cv::morphologyEx(resp, resp,cv::MORPH_DILATE,kernel);
-    }
-    else{
-        kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(9,9));
-        cv::morphologyEx(resp, resp,cv::MORPH_CLOSE,kernel);
-
-        /* Remove noise. */
-        // kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-        // cv::morphologyEx(resp, resp,cv::MORPH_OPEN,kernel);
-    }
-
-    if(_backgrnd_initialized){
-
-        Mat backgrnd_diff;
-        cv::absdiff(cur_fra, _backgrnd_i, backgrnd_diff);
-        cv::threshold(backgrnd_diff, backgrnd_diff,BAKCGRND_THRESHOLD, 255, cv::THRESH_BINARY);
-
-        cv::bitwise_and(resp, backgrnd_diff, res);
-
-        imshow("Backgrnd Diff",backgrnd_diff);
-
-    }
-    else{
-
-        res = resp;
-    }
-    
-    imshow("Res",res);
-
-    return res;
+    return resp;
 }
 
 
@@ -426,7 +378,7 @@ vector<Rect> objDetect::getRects(Mat resp) {
 }
 
 Mat objDetect::getBackgrndResp(void) const{
-    return _backgrnd_resp[1];
+    return _backgrnd_resp;
 }
 
 bool fdObject::addRect(const Rect& bbox){

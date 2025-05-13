@@ -46,8 +46,6 @@ public:
         bool hog = true, bool fixed_window = true, bool multiscale = true, 
         bool lab = true);
     
-    bool updateAppearance(const Mat& new_appearance);
-
     bool isSameObject(const Rect& bbox) const;
     Rect getROI(void) const;
     float getScore(void) const;
@@ -55,6 +53,9 @@ public:
     float getPeak(void) const;
     Mat getAppearance(void) const;
     bool apceIsAccepted(void) const;
+
+    bool getParas(Size& sz, float& scale, float& adjust) const;
+
 
     /* 8 bit. */
     char state;
@@ -67,7 +68,7 @@ protected:
 
     float _score = 0;
 
-    Mat _appearance = Mat();
+    Mat _newest_appearance;
 
     /* APCE. */
     float _beta_1 = 0.5;
@@ -119,18 +120,22 @@ public:
     vector<Rect> getROIs(void) const;
     bool addBackgrndResp(Mat backgrnd_resp);
 
-    Mat getFeature(const Rect roi, const Mat& frame);
+    Mat getFeature(const Rect roi, const Mat& frame, Size tmpl_sz, float scale = 1.0f, float adjust = 1.0f);
 
 
     const int max_tcr;
 
 protected:
 
+
+
     Tracking* _p_tcrs = nullptr;
     float _min_iou_req;
 
     /* CV_8UC1 background. */
     Mat _backgrnd_resp = Mat();
+
+    float _scale_step = 1.05f;
 
 };
 

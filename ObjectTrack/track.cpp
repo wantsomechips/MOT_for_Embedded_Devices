@@ -1,6 +1,7 @@
 #include "funcs.hpp"
 #include "detect.hpp"
 #include "track.hpp"
+#include "ffttools.hpp"
 
 #include <cstdio>
 
@@ -22,9 +23,7 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
     }
 
     Mat cost;
-    if(getCostMatrix(frame, fd_objs, cost) == false){
-
-    }
+    getCostMatrix(frame, fd_objs, cost);
 
     vector<int> matched_tcr_index;
     hungarianMatch(fd_objs, cost, matched_tcr_index);
@@ -46,8 +45,13 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
             tcr_matched[ index ] = true;
             Tracking& cur_tcr = _p_tcrs[ index ];
 
-            cur_tcr.state = TCR_RUNN;
-            cur_tcr.update(frame);
+            if(cur_tcr.state & TCR_RUNN){
+
+                cur_tcr.update(frame);
+            }
+            else{
+                cur_tcr.restart(frame, fd_objs[i].resultRect());
+            }
         
         }
         else{
@@ -119,39 +123,73 @@ bool objTrack::getCostMatrix(const Mat& frame, const vector<fdObject>& fd_objs, 
             continue;
         }
 
-        float resp_score, iou, max_iou_needed = 0.7f;
-        float appearance_score = 1.0f, max_appear_score_allowed = 0.5f;
-
-        if(cur_tcr.apceIsAccepted()){
-            resp_score = 0.5f * cur_tcr.getApce() / max_apce + 0.5f * cur_tcr.getPeak() / max_peak;
-        }
-        else{
-            resp_score = 0.0f;
-        }
+        float iou, max_iou_needed = 0.7f;
+        float appearance_score = 0.0f;
 
         for(int x = 0; x < fd_objs.size(); ++ x){
             Rect fd_roi = fd_objs[x].resultRect();
+            Rect kcf_roi = cur_tcr.getROI();
 
-            Mat roi_appearance = getFeature(fd_roi, frame);
+            // Point new_tl((int)(fd_roi.x + fd_roi.width / 2.0f - kcf_roi.width / 2.0f), (int)(fd_roi.y + fd_roi.height / 2.0f - kcf_roi.height / 2.0f));
+            // Rect new_roi(new_tl, kcf_roi.size());
+
+            // new_roi = new_roi & Rect(0, 0, frame.cols, frame.rows);
+
+            Size sz;
+
+            float scale, adjust;
+            
+            bool get_paras_success = cur_tcr.getParas(sz, scale, adjust);
+
+            Mat roi_appearance = getFeature(fd_roi, frame, sz, scale, adjust);
 
             Mat tcr_appearance = cur_tcr.getAppearance();
+
+
+            // cout << roi_appearance.size() << " --- " << tcr_appearance.size() << endl;
+
+            // cv::normalize(roi_appearance, roi_appearance);
+            // cv::normalize(tcr_appearance, tcr_appearance);
+
 
             cv::reduce(roi_appearance , roi_appearance , 1, cv::REDUCE_AVG);
             cv::reduce(tcr_appearance, tcr_appearance, 1, cv::REDUCE_AVG);
 
-            appearance_score = cv::norm(tcr_appearance, roi_appearance, cv::NORM_L2);
 
-            // cout << "DEBUG : Appearance L2: " << l2 <<endl;
+            float sigma = 0.05f;
+            Mat diff = roi_appearance - tcr_appearance;
+            appearance_score = std::exp(- diff.dot(diff) / (2 * sigma * sigma));
 
-            iou = func::IoU(cur_tcr.getROI(), fd_roi);
+
+            // std::cout << "norm² = " << diff.dot(diff)  << " score = " << appearance_score << std::endl;
+
+            
+            iou = func::IoU(kcf_roi, fd_roi);
 
             /* Truncate. */
-            appearance_score = (appearance_score > max_appear_score_allowed)? 1.0f : appearance_score / max_appear_score_allowed ;
             iou = (iou > max_iou_needed)? 1.0f : iou;
 
-            cost.at<float>(y,x) = 0.6f * (1.0f - iou) + 0.4f * appearance_score;
+            if(cur_tcr.state & TCR_RUNN){ 
+                cost.at<float>(y,x) = 0.7f * (1.0f - iou) + 0.3f * (1.0f - appearance_score);
+            }
+            else{
+                cost.at<float>(y,x) = 1.0f * (1.0f - appearance_score);
+            }
+
+            cout << "Ap: " << appearance_score << endl << "IoU: " << iou << endl << "Ct: " << cost.at<float>(y,x) <<endl<<endl;
         }
+        cout<< "--- --- ---" <<endl << endl;
     }
+
+    return true;
+}
+
+bool Tracking::getParas(Size& sz, float& scale, float& adjust) const{
+    sz = _p_kcf -> _tmpl_sz;
+
+    scale = _p_kcf -> latest_scale;
+
+    adjust = _p_kcf -> latest_adjust;
 
     return true;
 }
@@ -175,9 +213,8 @@ bool objTrack::hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, 
         }
     }
 
-    /* CLose to the cost then IoU = 0, 
-       which is allowing trackers in `TCR_LOST` could resume. */
-    float biggest_cost_allowed = 0.7f;
+
+    float biggest_cost_allowed = 0.5f;
     while(true){
         /* Bigger than maximum cost `1.0f`.*/
         float best_cost = 2.0f;
@@ -232,13 +269,11 @@ vector<Rect> objTrack::getROIs(void) const{
 bool Tracking::update(Mat& frame){
 
     Rect bbox;
-    Mat new_appearance;
     bbox = _p_kcf -> update(frame, _beta_1, _beta_2, _alpha_apce, _peak_value, _mean_peak_value, 
-                            _mean_apce_value, _current_apce_value, _apce_accepted, new_appearance);
+                            _mean_apce_value, _current_apce_value, _apce_accepted);
     _roi = bbox;
 
     if(_apce_accepted){
-        updateAppearance(new_appearance);
         _score = 1000.0f + _current_apce_value + _peak_value;
     }
     else{
@@ -316,20 +351,11 @@ bool Tracking::restart(Mat first_f, Rect roi, char _state, bool hog,
     state = _state;
     if(_p_kcf != nullptr) delete _p_kcf;
     _p_kcf = new KCFTracker(hog, fixed_window, multiscale, lab);
-    _p_kcf -> init(roi, first_f, _appearance);
+    _p_kcf -> init(roi, first_f);
 
     return true;
 }
 
-bool Tracking::updateAppearance(const Mat& new_appearance){
-
-    float alpha = 0.075f;
-    _appearance = (1.0f - alpha) * _appearance + alpha * new_appearance;
-
-    // cout << "DEBUG:: Appearance: " << _appearance.rows << " " << _appearance.cols << endl << endl << endl;
-
-    return true;
-}
 
 float Tracking::getScore(void) const{
     return _score;
@@ -348,8 +374,11 @@ Rect Tracking::getROI(void) const{
 }
 
 
+
+
 Mat Tracking::getAppearance(void) const{
-    return _appearance;
+    /* Return the features KCF tracker is using. */
+    return _p_kcf -> _tmpl;
 }
 
 float Tracking::getApce(void) const{
@@ -368,13 +397,14 @@ bool Tracking::apceIsAccepted(void) const{
 
 
 
-Mat objTrack::getFeature(const Rect roi, const Mat& frame){
+Mat objTrack::getFeature(const Rect roi, const Mat& frame, Size tmpl_sz, float scale, float adjust){
     bool hog = true, fixed_window = true;
     bool multiscale = true, lab = true;
 
     static KCFTracker tmp_kcf(hog, fixed_window, multiscale, lab);
     Mat appearance;
-    tmp_kcf.getRoiFeature(roi, frame, appearance);
+
+    tmp_kcf.getRoiFeature(roi, frame, appearance, tmpl_sz, scale, adjust);
 
     return appearance;
 }

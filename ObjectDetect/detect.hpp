@@ -8,17 +8,30 @@
 #include <vector>
 using std::vector;
 
+#include <queue>
+
+#include <stdint.h>
+
 /* Frame Difference threshold. */
 #define FD_THRESHOLD (15)
-#define BAKCGRND_THRESHOLD (35)
+#define BAKCGRND_THRESHOLD (25)
 #define MIN_BBOX_HEIGHT (20)
 #define MIN_BBOX_WIDTH (10)
 
 /* Detect Objects every DETEC_INTV frames. */
-#define DETEC_INTV (2)
+#define DETEC_INTV (5)
 
 /* Miminum frames number requirement for detection. */
 #define MIN_DETEC_FRM_REQ ( DETEC_INTV / 2 + 1)
+
+/* Size of frames buffer. Use 2 Frames Difference, so the size is 2. */
+#define FRM_BUFFER_SIZE (2)
+
+#if !defined(MAX) || !defined(MIN)
+#define MAX(a,b) ((a) > (b) ? (a):(b))
+#define MIN(a,b) ((a) < (b) ? (a):(b))
+#endif
+
 
 
 class fdObject{
@@ -27,9 +40,9 @@ public:
 
     fdObject():_min_iou_req(-1),_min_frm_req(-1){}
 
-    fdObject(const Rect& bbox, Rect image_rect,float min_iou_req = MIN_IOU_REQ, 
+    fdObject(const Rect& bbox,float min_iou_req = MIN_IOU_REQ, 
                 int min_frm_req = MIN_DETEC_FRM_REQ):
-                _image_rect(image_rect), _min_iou_req(min_iou_req), _min_frm_req(min_frm_req){
+                _min_iou_req(min_iou_req), _min_frm_req(min_frm_req){
         
         /* Store the result. */
         _result = bbox;
@@ -46,8 +59,6 @@ public:
 protected:
 
     Rect _result;
-
-    Rect _image_rect;
 
     vector<Rect> _rects;
 
@@ -70,15 +81,14 @@ public:
             throw std::runtime_error("ERR:Period must greater than 1");
         }
 
-        _clock_bound =  0xFFF0 + _period;
+        _p_frms = new Mat[FRM_BUFFER_SIZE];
 
-        _clock = _period;
+        cv::cvtColor(frame, _p_frms[0], cv::COLOR_BGR2GRAY);
 
-        _p_frms = new Mat[_period];
+        /* Pre-process done. */
+        _clock = 1;
 
-        cv::cvtColor(frame, _p_frms[_period - 1], cv::COLOR_BGR2GRAY);
-
-        _backgrnd = Mat(frame.size(), CV_32FC1, cv::Scalar(0));
+        _backgrnd = Mat(frame.size(), CV_8UC1, cv::Scalar(0));
     }
 
     ~objDetect(){
@@ -91,16 +101,19 @@ public:
     bool tick(const Mat& frame);
     vector<fdObject> getObjects(void) const;
 
-    Mat FramesDiff(Mat cur_fra, Mat pre_fra, Mat pp_fra = Mat(), bool three_frame_diff = false);
+    Mat FramesDiff(const Mat& pre_fra, const Mat& cur_fra);
     vector<Rect> getRects(Mat resp);
 
     Mat getFinalResp(void);
 
     Mat getBackgrndResp(void) const;
 
-    bool backgrndUpdate(const Mat& frame);
+    bool backgrndUpdate(const Mat& frame, const vector<Rect>& obj_rects);
 
     bool addTrackedObjs(const vector<Rect>& rois);
+
+    bool getBackgrndDiffResp(const Mat& cur_frame, Mat& final_resp);
+
 
 protected:
     vector<fdObject> _objs;
@@ -116,28 +129,23 @@ protected:
     Mat _backgrnd_i = Mat();
 
     /* Store last two 2 FD results. */
-    Mat _fd_diff[2];
-    Mat _fd_resp[2];
-
-    vector<Rect> _fd_obj_rects[2];
-
-    /* Store last the 3 FD Difference result. */
-    Mat _three_fd_resp;
+    Mat _fd_resp;
 
     /* Store last two Background Difference results. */
-    Mat _backgrnd_resp[2];
+    Mat _backgrnd_resp;
 
 
     
     bool _backgrnd_initialized = false;
-    int _backgrnd_init_counter = 7;
+    int _backgrnd_init_counter = 20;
     float _alpha_init = 0.8;
     float _alpha = 0.1;    
 
-    const int _period;
-    /* 16 bits. */
-    unsigned short  _clock = 0;
-    unsigned short _clock_bound = 0;
+    const uint_fast32_t _period;
+
+    /* 64 bits could be faster than 32 bits in 64 bits platform. 
+       uint_fast32_t can handle it. */
+    uint_fast32_t  _clock;
 
 };
 

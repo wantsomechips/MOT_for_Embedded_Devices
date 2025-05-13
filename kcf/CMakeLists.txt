@@ -13,4 +13,4 @@
 
 
 
-add_library(kcf fhog.cpp kcftracker.cpp)
+add_library(kcf fhog.cpp kcftracker.cpp ffttools.cpp)
