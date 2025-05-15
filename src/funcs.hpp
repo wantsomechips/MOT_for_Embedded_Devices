@@ -41,4 +41,16 @@ namespace func{
     bool MOT(string input);
 }
 
+
+/* Annotation Templates. */
+
+/**
+ * @brief 
+ *
+ * @param 
+ * @param 
+ * @return 
+ * 
+ */
+
 #endif

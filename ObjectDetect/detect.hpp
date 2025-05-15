@@ -33,26 +33,22 @@ using std::vector;
 #endif
 
 
-
+/**
+ * @class fdObject
+ * @brief Represent a single detected object.
+ * 
+ */
 class fdObject{
 
 public:
 
-    fdObject():_min_iou_req(-1),_min_frm_req(-1){}
+    fdObject(){}
 
-    fdObject(const Rect& bbox,float min_iou_req = MIN_IOU_REQ, 
-                int min_frm_req = MIN_DETEC_FRM_REQ):
-                _min_iou_req(min_iou_req), _min_frm_req(min_frm_req){
+    fdObject(const Rect& bbox){
         
         /* Store the result. */
         _result = bbox;
     }
-
-    bool addRect(const Rect& bbox);
-
-    bool getResult(void);
-
-    bool isSameObject(const Rect& bbox) const;
 
     Rect resultRect(void) const;
 
@@ -60,14 +56,19 @@ protected:
 
     Rect _result;
 
-    vector<Rect> _rects;
+    // vector<Rect> _rects;
 
-    float _min_iou_req;
-    int _min_frm_req;
+    // float _min_iou_req;
+    // int _min_frm_req;
 
 };
 
 
+/**
+ * @class objDetect
+ * @brief Handle the whole Detection process.
+ * 
+ */
 class objDetect{
 
 public:
@@ -83,9 +84,9 @@ public:
 
         _p_frms = new Mat[FRM_BUFFER_SIZE];
 
+        /* Pre-process. */
         cv::cvtColor(frame, _p_frms[0], cv::COLOR_BGR2GRAY);
 
-        /* Pre-process done. */
         _clock = 1;
 
         _backgrnd = Mat(frame.size(), CV_8UC1, cv::Scalar(0));
@@ -101,16 +102,9 @@ public:
     bool tick(const Mat& frame);
     vector<fdObject> getObjects(void) const;
 
-    Mat FramesDiff(const Mat& pre_fra, const Mat& cur_fra);
     vector<Rect> getRects(Mat resp);
 
-    Mat getFinalResp(void);
-
-    Mat getBackgrndResp(void) const;
-
     bool backgrndUpdate(const Mat& frame, const vector<Rect>& obj_rects);
-
-    bool addTrackedObjs(const vector<Rect>& rois);
 
     bool getBackgrndDiffResp(const Mat& cur_frame, Mat& final_resp);
 
@@ -123,24 +117,21 @@ protected:
     /* Pointers to binary images. */
     Mat * _p_frms = nullptr;
 
-    /* CV_32FC1 background. */
-    Mat _backgrnd = Mat();
     /* CV_8UC1 background. */
-    Mat _backgrnd_i = Mat();
+    Mat _backgrnd = Mat();
 
-    /* Store last two 2 FD results. */
+    /* Store the lastest FD results. */
     Mat _fd_resp;
 
-    /* Store last two Background Difference results. */
-    Mat _backgrnd_resp;
 
-
-    
+    /* Background initialization. */
     bool _backgrnd_initialized = false;
     int _backgrnd_init_counter = 20;
     float _alpha_init = 0.8;
     float _alpha = 0.1;    
 
+    /* The interval between two detections. 
+       Small interval doesn't indicate better performance. */
     const uint_fast32_t _period;
 
     /* 64 bits could be faster than 32 bits in 64 bits platform. 

@@ -1,97 +1,40 @@
-/* --- --- --- --- --- --- --- --- ---
 
-THREE FRAMES DIFFERENCE MOTION DETECTION
 
-PROS:
-- Objects are more likely to move consistently from frame to frame while
-  noises are usually only appear between two frames. With `bitwise_or` of 
-  two frame differences, objects' responses are enhanced while noises' 
-  responses remain.
-
-CONS:
-- The background must remains static. It only works for static cameral.
-
-- Easily disturbed by noise(like tree leaves moving) and background 
-  changes(like sudden brightness changes).
-
---- --- --- --- --- --- --- --- --- */
+/**
+ * @file detect.cpp
+ * @brief Handles the obejct detection part of the MOT system.
+ * @author wantsomechips
+ * @date 2025
+ * 
+ */
 
 #include "detect.hpp"
 #include <opencv2/opencv.hpp>
 #include "funcs.hpp"
 
+/**
+ * @brief Get the bounding box of Detected object.
+ * 
+ * Encapsulation protects class data by using functions for access, 
+ * preventing accidental changes.
+ * 
+ * @param void void.
+ * @return the bounding box of Detected object
+ * 
+ */
 Rect fdObject::resultRect(void) const{
 
     return _result;
 }
 
-bool fdObject::isSameObject(const Rect& bbox) const{
-
-    float iou = func::IoU(_result, bbox);
-
-    return (iou > _min_iou_req);
-}
-
-bool fdObject::getResult(){
-
-    if(_rects.size() == 2){
-
-        Rect pre = _rects[0];
-        Rect cur = _rects[1];
-        Rect final_rect = _result;
-
-        /* Use centroid to determine direction. */
-        Point pre_center(pre.x + pre.width / 2.0f, pre.y + pre.height / 2.0f);
-        Point cur_center(cur.x + cur.width / 2.0f, cur.y + cur.height / 2.0f);
-        Point dir =  cur_center - pre_center;
-
-        /* Normalization and expand. */
-        float expand_ratio = 0.1f;
-        float norm = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-
-        float dx = dir.x / norm * expand_ratio * cur.width;
-        float dy = dir.y / norm * expand_ratio * cur.height;
-
-        /* Top left points. */
-        float tl_x = final_rect.x;
-        float tl_y = final_rect.y;
-
-        /* Bottom right points. */
-        float br_x = final_rect.x + final_rect.width;
-        float br_y = final_rect.y + final_rect.height;
-
-        if(dx > 0){
-            br_x += dx;
-        }
-        else{
-            tl_x += dx;
-        }
-
-        if(dy > 0){
-            br_y += dy;
-        }
-        else{
-            tl_y += dy;
-        }
-
-        /* Boundry check. Could be empty! */
-        // _result = Rect(tl_x, tl_y, (br_x - tl_x), (br_y - tl_y)) & _image_rect;
-
-        if(_result.empty()){
-           
-            _result = final_rect;
-            return false;
-        }
-
-        /* Return `true` if the expansion succeeded.*/
-        return true;
-    }
-
-    return false;
-}
-
-
-
+/**
+ * @brief Top-level abstract function for the object Detection. Handle the Detection logic.
+ *
+ * @param frame     A single frame image input.
+ * 
+ * @return Boolean value. Return `true` if the Tracking goes on properly. 
+ * 
+ */
 bool objDetect::tick(const Mat& frame){
 
     /* Use frame.clone() or copyTo() to Deep Copy. Otherwise it would be Shallow Copy. */
@@ -107,7 +50,7 @@ bool objDetect::tick(const Mat& frame){
     _clock = (_clock % UINT_FAST32_MAX);
 
     /* Model background every frame. */
-    if(_backgrnd_initialized == false){
+    if(false == _backgrnd_initialized){
         /* 2 Frames Difference. */
         /* Remove noise. */
         Mat cur_frm_blur, pre_frm_blur;
@@ -141,6 +84,8 @@ bool objDetect::tick(const Mat& frame){
     }
 
     /* Background Frame Difference. */
+    vector<Rect> obj_rects;
+
     if(_backgrnd_initialized){
 
         Mat backgrnd_diff, kernel;
@@ -150,23 +95,18 @@ bool objDetect::tick(const Mat& frame){
 
         bool getResp = getBackgrndDiffResp(cur_frame, final_resp);
 
-        vector<Rect> obj_rects = getRects(final_resp);
+        obj_rects = getRects(final_resp);
         backgrndUpdate(cur_frame, obj_rects);
-
-        for(const Rect& obj_rect: obj_rects){
-
-            _objs.push_back(fdObject(obj_rect));
-        }
-
 
     }
     else{
-        vector<Rect> obj_rects = getRects(_fd_resp);
+        obj_rects = getRects(_fd_resp);
         
-        for(const Rect& obj_rect: obj_rects){
+    }
 
-            _objs.push_back(fdObject(obj_rect));
-        }
+    for(const Rect& obj_rect: obj_rects){
+
+        _objs.push_back(fdObject(obj_rect));
     }
 
     /* Collect and return detected obejects. */
@@ -176,11 +116,19 @@ bool objDetect::tick(const Mat& frame){
         return true;
     }
 
-
-
     return false;
 }
 
+/**
+ * @brief Get background frame difference response, including using a kernel to mitigate fragmentations.
+ *
+ * @param cur_frame     Current input frame.
+ * @param final_resp    Background frame difference response. 
+ *                      This is the result of this funciton.
+ * 
+ * @return Boolean value. Return `true` if the function goes on properly. 
+ * 
+ */
 bool objDetect::getBackgrndDiffResp(const Mat& cur_frame, Mat& final_resp){
     /* Kernele height should be an odd number. */
     Mat backgrnd_diff;
@@ -230,26 +178,16 @@ bool objDetect::getBackgrndDiffResp(const Mat& cur_frame, Mat& final_resp){
     return true;
 }
 
-
-
-Mat objDetect::getFinalResp(){
-
-    Mat final_resp;
-
-
-    if(_backgrnd_initialized){
-
-        final_resp = _backgrnd_resp;
-    }
-    else{
-        final_resp = _fd_resp;
-    }
-
-
-    return final_resp;
-
-}
-
+/**
+ * @brief Update the background model. 
+ *
+ * @param frame     A single frame image input. 
+ * @param obj_rects Bounding boxes of all objects detected or currently tracked. 
+ *                  They will be masked out when updateing background model.
+ * 
+ * @return 
+ * 
+ */
 bool objDetect::backgrndUpdate(const Mat& frame, const vector<Rect>& obj_rects){
 
     float alpha = _alpha;
@@ -306,62 +244,20 @@ bool objDetect::backgrndUpdate(const Mat& frame, const vector<Rect>& obj_rects){
 
 
 
-/* --- --- --- --- --- --- --- --- ---
 
-FUNC NAME: FramesDiff
-
-# Description
-Calculate the response of 2 or 3 frames difference.
-
-# Arguments
-@ cur_fra:  Current frame, frame `t`.
-@ pre_fra:  Previous frame, frame `t-1`.
-@ pp_fra:   Frame `t-2`. It's empty for 2 frames difference.
-
-# Returns
-@ res:      Response of frames differences.
-
---- --- --- --- --- --- --- --- --- */
-
-Mat objDetect::FramesDiff(const Mat& pre_fra, const Mat& cur_fra){
-
-    Mat cur_b, pre_b, resp;
-
-    cv::medianBlur(cur_fra,cur_b, 5);
-    cv::medianBlur(pre_fra,pre_b, 5);
-
-    cv::absdiff(cur_b, pre_b, resp);
-    cv::threshold(resp, resp,FD_THRESHOLD, 255, cv::THRESH_BINARY);
-
-    return resp;
-}
-
-
-
-/* --- --- --- --- --- --- --- --- ---
-
-FUNC NAME: getRects
-
-# Description
-Process frames difference's response and return Rects of detected objects.
-
-# Arguments
-@ resp:     Response of frames difference.
-
-# Returns
-@ objects:  Vector of Rects(bounding boxes) of detected objects.
-
---- --- --- --- --- --- --- --- --- */
-
+/**
+ * @brief Process frames difference's response and return Rects of detected objects.
+ *
+ * @param resp      Response of frames difference.
+ * @param 
+ * 
+ * @return Bounding boxes of detected objects.
+ * 
+ */
 vector<Rect> objDetect::getRects(Mat resp) {
 
     vector<Rect> objects;
     vector<vector<cv::Point2i>> contours;
-
-    // Mat kernel = cv::getStructuringElement(cv::MORPH_RECT,cv::Size(3,3));
-    // cv::morphologyEx(resp, resp,cv::MORPH_CLOSE,kernel);
-
-    // cv::imshow("CLOSE Resp", resp);
     
     cv:: findContours(resp, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
@@ -377,26 +273,22 @@ vector<Rect> objDetect::getRects(Mat resp) {
     return objects;
 }
 
-Mat objDetect::getBackgrndResp(void) const{
-    return _backgrnd_resp;
-}
-
-bool fdObject::addRect(const Rect& bbox){
-
-    _rects.push_back(bbox);
-    return true;
-}
-
+/**
+ * @brief Get the Detection result.
+ *
+ * Encapsulation protects class data by using functions for access, 
+ * preventing accidental changes.
+ * 
+ * @param void void.
+ * @param 
+ * 
+ * @return Detection result. A set of detected objects.
+ * 
+ */
 vector<fdObject> objDetect::getObjects(void) const{
 
     return _res;
 }
 
-bool objDetect::addTrackedObjs(const vector<Rect>& rois){
-    
-    _tracked_ROIs = rois;
-
-    return true;
-}
 
 

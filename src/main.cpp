@@ -1,5 +1,13 @@
 
 
+/**
+ * @file main.cpp
+ * @brief Program entrance.
+ * @author wantSomeChips
+ * @date 2025
+ * 
+ */
+
 #include "funcs.hpp"
 #include <opencv2/opencv.hpp>
 

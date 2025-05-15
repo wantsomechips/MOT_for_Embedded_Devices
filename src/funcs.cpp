@@ -1,7 +1,28 @@
+
+
+/**
+ * @file funcs.cpp
+ * @brief Additional functions and main function for the MOT system.
+ * @author wantSomeChips
+ * @date 2025
+ * 
+ */
+
 #include "funcs.hpp"
 #include "detect.hpp"
 #include "track.hpp"
 
+/**
+ * @brief Top-level abstract function that describes the overall system logic.
+ *
+ * @param input     Input for the MOT system. It could be a path to iamge sequence, video 
+ *                  or a camera index. 
+ *                  Default input is the test set `PETS09-S2L1`, which is an image sequence.
+ * 
+ * 
+ * @return Boolean value. Return `true` if the MOT system exited successfully.
+ * 
+ */
 bool func::MOT(string input){
 
     cv::VideoCapture cap;
@@ -40,11 +61,11 @@ bool func::MOT(string input){
         if(detect -> tick(frame)){
             fd_objs = detect -> getObjects();
 
-            track -> addBackgrndResp( detect -> getBackgrndResp());
+            // track -> addBackgrndResp( detect -> getBackgrndResp());
 
             track -> tick(frame, fd_objs);
 
-            detect -> addTrackedObjs( track -> getROIs());
+            // detect -> addTrackedObjs( track -> getROIs());
         
 
             /* Only for testing object detection. */
@@ -54,9 +75,9 @@ bool func::MOT(string input){
             }
         }
         else{
-            track -> addBackgrndResp( detect -> getBackgrndResp());
+            // track -> addBackgrndResp( detect -> getBackgrndResp());
             track -> tick(frame);
-            detect -> addTrackedObjs( track -> getROIs());
+            // detect -> addTrackedObjs( track -> getROIs());
         }
 
         cv::imshow(string("Test Set: ") + NAME,frame);        
@@ -77,28 +98,18 @@ bool func::MOT(string input){
 
 
 
-
-/* --- --- --- --- --- --- --- --- ---
-
-FUNC NAME: IoU
-
-# Description
-Calculate IoU of two Rects. The formula is modified in order to 
-merge the small fragments caused by occlusion.
-
-# Arguments
-@ bbox_a:   First bounding box;
-@ bbox_b:   Second bounding box;
-
-# Returns
-@ iou:      0.0 ~ 1.0，intersection over union;
-
---- --- --- --- --- --- --- --- --- */
+/**
+ * @brief Calculate Intersection over Union (IoU) of two bounding boxes. 
+ *
+ * @param bbox_a    First bounding box;
+ * @param bbox_b    Second bounding box;
+ * 
+ * @return IoU value, it's in range [0.0, 1.0].
+ * 
+ */
 float func::IoU(const Rect& bbox_a, const Rect& bbox_b){
 
     int inter_area = ( bbox_a & bbox_b).area();
-
-    double inter_area_ratio = 1.0f * inter_area / std::min(bbox_a.area(), bbox_b.area());
 
     /* Believe that it's just a fragment caused by occlusion. */
     float iou = 1.0f * inter_area / (bbox_a.area() + bbox_b.area() - inter_area);

@@ -25,6 +25,11 @@
 
 #define MAX_TCR (20)
 
+/**
+ * @class Tracking
+ * @brief Represent a sinlge tracked object.
+ * 
+ */
 class Tracking{
 
 public:
@@ -42,17 +47,16 @@ public:
 
     bool update(Mat& frame);
 
+    /* `start` is included in `restart`. */
     bool restart(Mat first_f, Rect roi, char _state = TCR_RUNN, 
         bool hog = true, bool fixed_window = true, bool multiscale = true, 
         bool lab = true);
     
-    bool isSameObject(const Rect& bbox) const;
     Rect getROI(void) const;
     float getScore(void) const;
     float getApce(void) const;
     float getPeak(void) const;
     Mat getAppearance(void) const;
-    bool apceIsAccepted(void) const;
 
     bool getParas(Size& sz, float& scale, float& adjust) const;
 
@@ -66,34 +70,39 @@ protected:
     Rect _roi;
     float _min_iou_req;
 
-    float _score = 0;
+    float _score = 0.0f;
 
     Mat _newest_appearance;
 
     /* APCE. */
-    float _beta_1 = 0.5;
-    float _beta_2 = 0.5;  
-    float _alpha_apce = 0.1;  
+    float _beta_1 = 0.5f;
+    float _beta_2 = 0.5f;  
+    float _alpha_apce = 0.1f;  
 
-    float _mean_apce_value = 0;
-    float _current_apce_value = 0;
+    float _mean_apce_value = 0.0f;
+    float _current_apce_value = 0.0f;
 
-    float _peak_value = 0;
-    float _mean_peak_value = 0;
+    float _peak_value = 0.0f;
+    float _mean_peak_value = 0.0f;
 
     bool _apce_accepted = true;
 
 };
 
 
+/**
+ * @class objTrack
+ * @brief Handle the whole Tracking process.
+ * 
+ */
 class objTrack{
 
 public:
 
     objTrack():max_tcr(0){}
 
-    objTrack(int max_tcr = MAX_TCR, float min_iou_req = MIN_IOU_REQ):
-                    max_tcr(max_tcr), _min_iou_req(min_iou_req){
+    objTrack(int max_tcr = MAX_TCR):
+                    max_tcr(max_tcr){
 
         _p_tcrs = new Tracking[max_tcr];
 
@@ -112,13 +121,10 @@ public:
 
     bool getCostMatrix(const Mat& frame, const vector<fdObject>& fd_objs, Mat& cost);
     bool hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, vector<int>& matched_tcr_index);
-
-    int tcrFullHandler(void);
     
     int getFreeTcrIndex(void);
 
     vector<Rect> getROIs(void) const;
-    bool addBackgrndResp(Mat backgrnd_resp);
 
     Mat getFeature(const Rect roi, const Mat& frame, Size tmpl_sz, float scale = 1.0f, float adjust = 1.0f);
 
@@ -130,12 +136,7 @@ protected:
 
 
     Tracking* _p_tcrs = nullptr;
-    float _min_iou_req;
 
-    /* CV_8UC1 background. */
-    Mat _backgrnd_resp = Mat();
-
-    float _scale_step = 1.05f;
 
 };
 

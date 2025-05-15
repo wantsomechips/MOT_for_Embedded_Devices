@@ -1,3 +1,13 @@
+
+
+/**
+ * @file track.cpp
+ * @brief Handles the obejct tracking part of the MOT system.
+ * @author wantSomeChips
+ * @date 2025
+ * 
+ */
+
 #include "funcs.hpp"
 #include "detect.hpp"
 #include "track.hpp"
@@ -5,7 +15,17 @@
 
 #include <cstdio>
 
-
+/**
+ * @brief Top-level abstract function for the object Tracking. Handle the Tracking logic.
+ *
+ * @param frame     A single frame image input.
+ * @param fd_objs   Detected objects, which is the result of Detection.
+ *                  It's empty when only trackers update and Detection is skipped 
+ *                  due to Detection interval. 
+ * 
+ * @return Boolean value. Return `true` if the Tracking goes on properly. 
+ * 
+ */
 bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
     // cout << "DEBUG:objTrack-tick - fd_objs.size: " << fd_objs.size() << endl;
@@ -27,12 +47,6 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
     vector<int> matched_tcr_index;
     hungarianMatch(fd_objs, cost, matched_tcr_index);
-    for(int i:matched_tcr_index)
-    {
-        cout<< i << " ";
-    }
-    cout<<endl;
-
 
     vector<bool> tcr_matched(max_tcr, false);
 
@@ -52,15 +66,11 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
             else{
                 cur_tcr.restart(frame, fd_objs[i].resultRect());
             }
-        
         }
         else{
+
             int index = getFreeTcrIndex();
-
-            if(index == INVAILD_INDEX){
-
-                index = tcrFullHandler();
-            }
+            
             tcr_matched[ index ] = true;
             _p_tcrs[index].restart(frame, fd_objs[i].resultRect());
         }
@@ -92,6 +102,18 @@ bool objTrack::tick(Mat& frame, vector<fdObject> fd_objs){
 
 }
 
+/**
+ * @brief Calculate the cost matrix for the appropriate Hungarian Algorithm to pair the detected objects and trackers. 
+ * 
+ * A higher cost indicates a lower confidence for matching this detected object to the tracker.
+ *
+ * @param frame     A single frame image input.
+ * @param fd_objs   Detected objects.
+ * @param cost      Cost matrix. This is the result of this function.
+ * 
+ * @return Boolean value. Return `true` if the calculation goes on properly. 
+ * 
+ */
 bool objTrack::getCostMatrix(const Mat& frame, const vector<fdObject>& fd_objs, Mat& cost){
     cost = std::move( Mat(Size(fd_objs.size(), max_tcr), CV_32FC1, cv::Scalar(1.0f)));
 
@@ -152,6 +174,7 @@ bool objTrack::getCostMatrix(const Mat& frame, const vector<fdObject>& fd_objs, 
             // cv::normalize(tcr_appearance, tcr_appearance);
 
 
+            /* `reduce` is faster and more accurate than `normalize`. */
             cv::reduce(roi_appearance , roi_appearance , 1, cv::REDUCE_AVG);
             cv::reduce(tcr_appearance, tcr_appearance, 1, cv::REDUCE_AVG);
 
@@ -160,6 +183,7 @@ bool objTrack::getCostMatrix(const Mat& frame, const vector<fdObject>& fd_objs, 
             Mat diff = roi_appearance - tcr_appearance;
             appearance_score = std::exp(- diff.dot(diff) / (2 * sigma * sigma));
 
+            // appearance_score = 0.0f;
 
             // std::cout << "norm² = " << diff.dot(diff)  << " score = " << appearance_score << std::endl;
 
@@ -176,24 +200,25 @@ bool objTrack::getCostMatrix(const Mat& frame, const vector<fdObject>& fd_objs, 
                 cost.at<float>(y,x) = 1.0f * (1.0f - appearance_score);
             }
 
-            cout << "Ap: " << appearance_score << endl << "IoU: " << iou << endl << "Ct: " << cost.at<float>(y,x) <<endl<<endl;
+            // cout << "Ap: " << appearance_score << endl << "IoU: " << iou << endl << "Ct: " << cost.at<float>(y,x) <<endl<<endl;
         }
-        cout<< "--- --- ---" <<endl << endl;
+        // cout<< "--- --- ---" <<endl << endl;
     }
 
     return true;
 }
 
-bool Tracking::getParas(Size& sz, float& scale, float& adjust) const{
-    sz = _p_kcf -> _tmpl_sz;
-
-    scale = _p_kcf -> latest_scale;
-
-    adjust = _p_kcf -> latest_adjust;
-
-    return true;
-}
-
+/**
+ * @brief An greedy approximate Hungarian Match Algorithm implementation.
+ *
+ * @param fd_objs           Detected objects.
+ * @param cost              Cost matrix we calculated.
+ * @param matched_tcr_index Index of the successfully matched trackers. 
+ *                          This is the result of this function.
+ * 
+ * @return Boolean value. Return `true` if the match goes on properly. 
+ * 
+ */
 bool objTrack::hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, vector<int>& matched_tcr_index){
     int n = fd_objs.size();
 
@@ -252,6 +277,88 @@ bool objTrack::hungarianMatch(const vector<fdObject>& fd_objs, const Mat& cost, 
 }
 
 
+/**
+ * @brief Get the index of a free KCF tracker. 
+ * 
+ * A maximum number of trackers is enforced to control overall resource usage.
+ * 
+ * If all tracker are busy, schduling, based on tracking quality, will be performed.
+ *
+ * @param void void.
+ * 
+ * @return The index of a free tracker.
+ * 
+ */
+int objTrack::getFreeTcrIndex(void){
+
+    /* Return the index of Tracker with minimum score. */
+
+    for(int i = 0;i < max_tcr; ++ i){        
+        if(_p_tcrs[i].state & TCR_READY){
+            
+            return i;
+        }
+    }
+
+    for(int i = 0;i < max_tcr; ++ i){
+        if(_p_tcrs[i].state & TCR_LOST){
+            return i;
+        }
+    }
+
+    /* All trackers are busy. */
+    int index = INVAILD_INDEX;
+    float score_min = _p_tcrs[0].getScore();
+    float score;
+
+    for(int i = 1; i < max_tcr; ++ i){
+        score = _p_tcrs[i].getScore();
+        if(score < score_min){
+            score_min = score;
+            index = i;
+        }
+    }
+
+    return index;
+}
+
+/**
+ * @brief Extract the features of region of interest exactly in the same way as tracker.
+ * 
+ * Parameter `tmpl_sz` works together with parameters `scale` and `adjust` to ensure that 
+ * the newly computed feature has the same size as the one used by the tracker for comparison.
+ *
+ * @param roi       Bounding box of the region of interest.
+ * @param frame     A single frame image input.
+ * @param tmpl_sz   Size of the compared tracker's template. 
+ * @param scale     Scale used by the compared tracker. 
+ * @param adjust    Adjust scale used by the compared tracker. 
+ * 
+ * @return Boolean value. Return `true` if the calculation goes on properly. 
+ * 
+ */
+
+Mat objTrack::getFeature(const Rect roi, const Mat& frame, Size tmpl_sz, float scale, float adjust){
+    bool hog = true, fixed_window = true;
+    bool multiscale = true, lab = true;
+
+    static KCFTracker tmp_kcf(hog, fixed_window, multiscale, lab);
+    Mat appearance;
+
+    tmp_kcf.getRoiFeature(roi, frame, appearance, tmpl_sz, scale, adjust);
+
+    return appearance;
+}
+
+/**
+ * @brief Get all the bounding boxes currently tracking.
+ *
+ * Encapsulation protects class data by using functions for access, 
+ * preventing accidental changes.
+ * 
+ * @return Bounding boxes currently tracking.
+ * 
+ */
 vector<Rect> objTrack::getROIs(void) const{
 
     vector<Rect> res;
@@ -266,6 +373,14 @@ vector<Rect> objTrack::getROIs(void) const{
     return res;
 }
 
+/**
+ * @brief Update all the trackers with an new single frame of image.
+ *
+ * @param frame     A single frame image input.
+ * 
+ * @return Boolean value. Return `true` if the updating goes on properly. 
+ * 
+ */
 bool Tracking::update(Mat& frame){
 
     Rect bbox;
@@ -302,48 +417,22 @@ bool Tracking::update(Mat& frame){
     return true;
 }
 
-int objTrack::tcrFullHandler(void){
-
-    /* Return the index of Tracker with minimum score. */
-    int index = 0;
-    float score_min = _p_tcrs[0].getScore();
-    float score;
-    for(int i = 1; i < max_tcr; ++ i){
-        score = _p_tcrs[i].getScore();
-        if(score < score_min){
-            score_min = score;
-            index = i;
-        }
-    }
-
-    return index;
-}
-
-
-int objTrack::getFreeTcrIndex(void){
-
-    for(int i = 0;i < max_tcr; ++ i){        
-        if(_p_tcrs[i].state & TCR_READY){
-            
-            return i;
-        }
-    }
-
-    for(int i = 0;i < max_tcr; ++ i){
-        if(_p_tcrs[i].state & TCR_LOST){
-            return i;
-        }
-    }
-
-    return INVAILD_INDEX;
-}
-
-bool objTrack::addBackgrndResp(Mat backgrnd_resp){
-    backgrnd_resp.copyTo(_backgrnd_resp);
-
-    return true;
-}
-
+/**
+ * @brief Start or restart a tracking process with an new tracker.
+ *
+ * Initializes a new tracker with the given parameters and sets the tracker's state.
+ *
+ * @param first_f       The initial frame used for tracker initialization.
+ * @param roi           Bounding box of the region of interest to track.
+ * @param _state        Initial state assigned to the tracker. Default value is `TCR_RUNN`.
+ * @param hog           Whether to use HOG features. Default value is `true`.
+ * @param fixed_window  Whether to use a fixed window size. Default value is `true`.
+ * @param multiscale    Whether to enable multi-scale tracking. Default value is `true`.
+ * @param lab           Whether to include Lab color features. Default value is `true`.
+ * 
+ * @return Boolean value. Return `true` if the initialization goes on properly. 
+ * 
+ */
 bool Tracking::restart(Mat first_f, Rect roi, char _state, bool hog, 
     bool fixed_window, bool multiscale, bool lab){
 
@@ -356,55 +445,98 @@ bool Tracking::restart(Mat first_f, Rect roi, char _state, bool hog,
     return true;
 }
 
-
+/**
+ * @brief Get the tracking quality score of KCF tracker.
+ *
+ * Encapsulation protects class data by using functions for access, 
+ * preventing accidental changes.
+ * 
+ * @param void void.
+ * 
+ * @return The tracking quality score of KCF tracker.
+ * 
+ */
 float Tracking::getScore(void) const{
     return _score;
 }
 
-bool Tracking::isSameObject(const Rect& bbox) const{
+/**
+ * @brief Retrieve template size and scaling parameters from the KCF tracker.
+ *
+ * @param sz       Output parameter to receive the template size used by the tracker.
+ * @param scale    Output parameter to receive the latest scale applied during tracking.
+ * @param adjust   Output parameter to receive the latest adjust scale used.
+ * 
+ * @return Boolean value. Return `true` if the function goes on properly. 
+ * 
+ */
+bool Tracking::getParas(Size& sz, float& scale, float& adjust) const{
+    sz = _p_kcf -> _tmpl_sz;
 
-    float iou = func::IoU(_roi, bbox);
+    scale = _p_kcf -> latest_scale;
 
-    return (iou > _min_iou_req);
+    adjust = _p_kcf -> latest_adjust;
+
+    return true;
 }
 
+/**
+ * @brief Get the bounding box of a tracked object.
+ *
+ * Encapsulation protects class data by using functions for access, 
+ * preventing accidental changes.
+ * 
+ * @return The bounding box of a tracked object.
+ * 
+ */
 Rect Tracking::getROI(void) const{
 
     return _roi;
 }
 
 
-
-
+/**
+ * @brief Get the appearance features of KCF tracker.
+ *
+ * Encapsulation protects class data by using functions for access, 
+ * preventing accidental changes.
+ * 
+ * @param void void.
+ * 
+ * @return The appearance features of KCF tracker.
+ * 
+ */
 Mat Tracking::getAppearance(void) const{
     /* Return the features KCF tracker is using. */
     return _p_kcf -> _tmpl;
 }
 
+/**
+ * @brief Get the Average Peak-to-Correlation Energy (APCE) of KCF tracker.
+ *
+ * Encapsulation protects class data by using functions for access, 
+ * preventing accidental changes.
+ * 
+ * @param void void.
+ * 
+ * @return APCE value of KCF tracker.
+ * 
+ */
 float Tracking::getApce(void) const{
     return _current_apce_value;
 }
 
+/**
+ * @brief Get the peak value of KCF response map.
+ *
+ * Encapsulation protects class data by using functions for access, 
+ * preventing accidental changes.
+ * 
+ * @param void void.
+ * 
+ * @return The peak value of KCF response map.
+ * 
+ */
 float Tracking::getPeak(void) const{
     return _peak_value;
-}
-
-bool Tracking::apceIsAccepted(void) const{
-    return _apce_accepted;
-}
-
-
-
-
-
-Mat objTrack::getFeature(const Rect roi, const Mat& frame, Size tmpl_sz, float scale, float adjust){
-    bool hog = true, fixed_window = true;
-    bool multiscale = true, lab = true;
-
-    static KCFTracker tmp_kcf(hog, fixed_window, multiscale, lab);
-    Mat appearance;
-
-    tmp_kcf.getRoiFeature(roi, frame, appearance, tmpl_sz, scale, adjust);
-
-    return appearance;
 }
