@@ -100,100 +100,17 @@ void KCFTracker::init(const cv::Rect &roi, cv::Mat image)
  }
 
 
-bool KCFTracker::getRoiFeature(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance, cv::Size tmpl_sz, float scale, float adjust) {
+ cv::Mat KCFTracker::getTmpl(){
+
+    return _tmpl;
+ }
+
+bool KCFTracker::getRoiFeature(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance) {
     
     _roi = roi;
 
-    // 使用传入参数计算 extracted_roi
-    float cx = _roi.x + _roi.width / 2.0f;
-    float cy = _roi.y + _roi.height / 2.0f;
-
-    _tmpl_sz = tmpl_sz;  // 直接使用外部指定的 tmpl_sz
-    _scale = scale;
-
-    cv::Rect extracted_roi;
-    extracted_roi.width = adjust * _scale * _tmpl_sz.width;
-    extracted_roi.height = adjust * _scale * _tmpl_sz.height;
-    extracted_roi.x = cx - extracted_roi.width / 2.0f;
-    extracted_roi.y = cy - extracted_roi.height / 2.0f;
-
-    // 提取图像补边
-    cv::Mat z = RectTools::subwindow(image, extracted_roi, cv::BORDER_REPLICATE);
-
-    // 缩放到目标模板尺寸（注意是像素单位）
-    if (z.cols != _tmpl_sz.width || z.rows != _tmpl_sz.height) {
-        cv::resize(z, z, _tmpl_sz);
-    }
-
-    // 提取特征图
-    cv::Mat FeaturesMap;
-
-    if (_hogfeatures) {
-        IplImage z_ipl = cvIplImage(z);
-        CvLSVMFeatureMapCaskade *map;
-        getFeatureMaps(&z_ipl, cell_size, &map);
-        normalizeAndTruncate(map, 0.2f);
-        PCAFeatureMaps(map);
-
-        size_patch[0] = map->sizeY;
-        size_patch[1] = map->sizeX;
-        size_patch[2] = map->numFeatures;
-
-        FeaturesMap = cv::Mat(cv::Size(map->numFeatures, map->sizeX * map->sizeY), CV_32F, map->map).t();
-        freeFeatureMapObject(&map);
-
-        // Lab 特征（可选）
-        if (_labfeatures) {
-            cv::Mat imgLab;
-            cvtColor(z, imgLab, CV_BGR2Lab);
-            unsigned char *input = imgLab.data;
-
-            cv::Mat outputLab = cv::Mat(_labCentroids.rows, size_patch[0] * size_patch[1], CV_32F, float(0));
-            int cntCell = 0;
-
-            for (int cY = cell_size; cY < z.rows - cell_size; cY += cell_size) {
-                for (int cX = cell_size; cX < z.cols - cell_size; cX += cell_size) {
-                    for (int y = cY; y < cY + cell_size; ++y) {
-                        for (int x = cX; x < cX + cell_size; ++x) {
-                            float l = (float)input[(z.cols * y + x) * 3];
-                            float a = (float)input[(z.cols * y + x) * 3 + 1];
-                            float b = (float)input[(z.cols * y + x) * 3 + 2];
-
-                            float minDist = FLT_MAX;
-                            int minIdx = 0;
-                            float *centroid = (float*)_labCentroids.data;
-                            for (int k = 0; k < _labCentroids.rows; ++k) {
-                                float dist = std::pow(l - centroid[3 * k], 2) + std::pow(a - centroid[3 * k + 1], 2) 
-                                                + std::pow(b - centroid[3 * k + 2], 2);
-                                if (dist < minDist) {
-                                    minDist = dist;
-                                    minIdx = k;
-                                }
-                            }
-
-                            outputLab.at<float>(minIdx, cntCell) += 1.0f / cell_sizeQ;
-                        }
-                    }
-                    cntCell++;
-                }
-            }
-
-            size_patch[2] += _labCentroids.rows;
-            FeaturesMap.push_back(outputLab);
-        }
-    } 
-    else {
-        FeaturesMap = RectTools::getGrayImage(z);
-        FeaturesMap -= 0.5f;
-        size_patch[0] = z.rows;
-        size_patch[1] = z.cols;
-        size_patch[2] = 1;
-    }
-
-    createHanningMats();
-    FeaturesMap = hann.mul(FeaturesMap);
-
-    appearance = std::move(FeaturesMap);
+    appearance = getFeatures(image, 1);
+    
     return true;
 }
 
@@ -214,9 +131,6 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
 
     cv::Point2f res = detect(_tmpl, getFeatures(image, 0, 1.0f), peak_value, beta_1, beta_2, 
             alpha_apce, mean_peak_value, mean_apce_value, current_apce_value, apce_accepted);
-
-    latest_scale = _scale;
-    latest_adjust = 1.0f;
 
     if (scale_step != 1) {
         // Test at a smaller _scale
@@ -241,9 +155,6 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
             mean_apce_value = new_mean_apce_value;
             current_apce_value = new_current_apce_value;
             apce_accepted = new_apce_accepted;
-
-            latest_scale = _scale;
-            latest_adjust = 1.0f / scale_step;
         }
 
         // Test at a bigger _scale
@@ -263,9 +174,6 @@ cv::Rect KCFTracker::update(cv::Mat image, float beta_1, float beta_2, float alp
             mean_apce_value = new_mean_apce_value;
             current_apce_value = new_current_apce_value;
             apce_accepted = new_apce_accepted;
-
-            latest_scale = _scale;
-            latest_adjust = scale_step;
         }
     }
 

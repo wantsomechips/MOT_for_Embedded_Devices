@@ -84,6 +84,19 @@ make
 ../bin/main
 ```
 
+Run with self-define input:
+
+```bash
+cd ./build
+cmake ..
+make
+../bin/main <input>
+```
+
+- input: camera index, video or path to image sequence. 
+           E.g., 0, "../PETS09-S2L1/img1%06d.jpg".
+
+
 
 ## Visualization
 

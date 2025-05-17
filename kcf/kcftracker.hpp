@@ -30,12 +30,9 @@ public:
     float scale_step; // scale step for multi-scale estimation
     float scale_weight;  // to downweight detection scores of other scales for added stability
 
-    bool getRoiFeature(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance, cv::Size tmpl_sz, float scale = 1.0f, float adjust = 1.0f);
+    bool getRoiFeature(const cv::Rect &roi, cv::Mat image, cv::Mat& appearance);
 
-    cv::Mat _tmpl;
-    cv::Size _tmpl_sz;
-    float latest_scale;
-    float latest_adjust;
+    cv::Mat getTmpl(void);
 
     // Obtain sub-window from image, with replication-padding and extract features
     cv::Mat getFeatures(const cv::Mat & image, bool inithann, float scale_adjust = 1.0f);
@@ -68,6 +65,9 @@ protected:
     cv::Mat _num;
     cv::Mat _den;
     cv::Mat _labCentroids;
+
+    cv::Mat _tmpl;
+    cv::Size _tmpl_sz;
 
 private:
     int size_patch[3];

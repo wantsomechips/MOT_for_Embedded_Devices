@@ -1,0 +1,28 @@
+var class_tracking =
+[
+    [ "Tracking", "class_tracking.html#acb7abb36dfc0593957473da17652bd1a", null ],
+    [ "Tracking", "class_tracking.html#a5c4fa0c7623a8d44e22429a1583eb9aa", null ],
+    [ "~Tracking", "class_tracking.html#a1c57405d9a91d752d8e8328025004911", null ],
+    [ "getApce", "class_tracking.html#a557f17fc5125fc4fb5cc2c30102be443", null ],
+    [ "getAppearance", "class_tracking.html#ac3f004a1d42f267f4d2039f131698c14", null ],
+    [ "getPeak", "class_tracking.html#aa007f49d0d3201cbee1c575c67c32caf", null ],
+    [ "getROI", "class_tracking.html#aece2392bec702c0dc6ec1ddae350453e", null ],
+    [ "getScore", "class_tracking.html#a42e0c1560d8425429c9a452151cb87e2", null ],
+    [ "restart", "class_tracking.html#a6ad087477d3ec88ce6c1f55fefd2b0fd", null ],
+    [ "update", "class_tracking.html#a379c3ec8080dd4840ce8cda260c866b0", null ],
+    [ "_alpha_apce", "class_tracking.html#a8d339118dffbe5b1939fd6fadd5278b1", null ],
+    [ "_apce_accepted", "class_tracking.html#a7c708faa5bb1ea01e82b5bed48bd6019", null ],
+    [ "_beta_1", "class_tracking.html#afe0d56df1fb92cb3bee36868acfb13e0", null ],
+    [ "_beta_2", "class_tracking.html#ae2f7437a008bbbdfeeb49994ea6f3f1b", null ],
+    [ "_current_apce_value", "class_tracking.html#a48806c29322a68db43ea599bb64ed9dc", null ],
+    [ "_id", "class_tracking.html#a73c1a88adbc7e852c0354d91c849b7a5", null ],
+    [ "_mean_apce_value", "class_tracking.html#a9767a2220d1e18778e1e8d7867603860", null ],
+    [ "_mean_peak_value", "class_tracking.html#a77bb9d0c259152888c5950971cb42500", null ],
+    [ "_min_iou_req", "class_tracking.html#a516d4be0406091837802d790bc94870d", null ],
+    [ "_newest_appearance", "class_tracking.html#a9629c1d4dd40ed717dd1a94045a9b976", null ],
+    [ "_p_kcf", "class_tracking.html#a1554aaf9bc8ee3b284364cb20a2ac147", null ],
+    [ "_peak_value", "class_tracking.html#ad3da79df54c0ddf934a92f05a231eefe", null ],
+    [ "_roi", "class_tracking.html#a6e894fce24c96d1460d5b6896c488017", null ],
+    [ "_score", "class_tracking.html#a25724f701ab0e194bbad22f1432f9b4e", null ],
+    [ "state", "class_tracking.html#a6c96da6d6615e8789b9d133f1f4c7fce", null ]
+];

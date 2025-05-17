@@ -29,7 +29,10 @@ using cv::Mat, cv::Rect, cv::Point, cv::Size;
 #define imExt ".jpg"
 
 /* Minmum IoU requirement. */
-#define MIN_IOU_REQ (0.5)
+#define MIN_IOU_REQ (0.3)
+
+
+#define ERR_ARG_NUM (1)
 
 class fdObject;
 class objDetect;
@@ -41,16 +44,5 @@ namespace func{
     bool MOT(string input);
 }
 
-
-/* Annotation Templates. */
-
-/**
- * @brief 
- *
- * @param 
- * @param 
- * @return 
- * 
- */
 
 #endif

@@ -15,13 +15,23 @@
 using std::string;
 
 
-int main(void){
+int main(int argc, char* argv[]){
     
-    string path = string("../") + NAME + "/" +  imDir + "/%06d" + imExt;
-    
+    if(argc > 2){
+        std::cerr << "ERROR: Only one argument allowed." << endl;
+        return ERR_ARG_NUM;
+    }
+
+    string path;
+    if(2 == argc){
+        path = argv[1];
+    }
+    /* Default test set. */
+    else if(1 == argc){
+        path = string("../") + NAME + "/" +  imDir + "/%06d" + imExt;
+    }
+    cout<< path<<endl;
     func::MOT(path);
 
-
     return 0;
-
 }

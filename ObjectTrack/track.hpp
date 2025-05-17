@@ -9,21 +9,38 @@
 #include "kcftracker.hpp"
 
 /* Tracker States. */
+
 /* It's correctly running. */
 #define TCR_RUNN (0x01 << 2)
-/* Sub-state of TCR_RUNN, represents how many detections needed 
+
+/* (ABANDONED)Sub-state of TCR_RUNN, represents how many detections needed 
    to  confirm a newly detected object. */
-#define TCR_RUNN_3 (TCR_RUNN + 2)
+#define TCR_RUNN_3 (TCR_RUNN + 3)
+
 /* Ready to use. */
 #define TCR_READY (0x01 << 3)
+
 /* Object lost. */
 #define TCR_LOST (0x01 << 4)
 #define TCR_LOST_3 (TCR_LOST + 3)
 
-#define INVAILD_INDEX (-1)
+/* If the given states are the same state, including sub-state. */
+#define IS_SAME_STATE(state_1, state_2) ((state_1 >> 2) == (state_2 >> 2) )
 
+/* If the given states are state and sub-state. */
+#define IS_SUB_STATE(state_1, state_2) (IS_SAME_STATE(state_1, state_2) &&\
+                                        ((state_1) != (state_2)))
 
+/* Reduce a sub-state. A sub-state will reach a final state by reducing. */
+#define REDUCE_SUB_STATE(state) (-- state)
+
+/* Meaning-less index. */
+#define INVALID_INDEX (-1)
+
+/* Maximum trackers running at the same time. */
 #define MAX_TCR (20)
+
+
 
 /**
  * @class Tracking
@@ -57,9 +74,6 @@ public:
     float getApce(void) const;
     float getPeak(void) const;
     Mat getAppearance(void) const;
-
-    bool getParas(Size& sz, float& scale, float& adjust) const;
-
 
     /* 8 bit. */
     char state;
@@ -126,14 +140,11 @@ public:
 
     vector<Rect> getROIs(void) const;
 
-    Mat getFeature(const Rect roi, const Mat& frame, Size tmpl_sz, float scale = 1.0f, float adjust = 1.0f);
-
+    Mat getFeature(const Rect roi, const Mat& frame);
 
     const int max_tcr;
 
 protected:
-
-
 
     Tracking* _p_tcrs = nullptr;
 

@@ -19,15 +19,14 @@
  *                  or a camera index. 
  *                  Default input is the test set `PETS09-S2L1`, which is an image sequence.
  * 
- * 
- * @return Boolean value. Return `true` if the MOT system exited successfully.
+ * @return Boolean value. Return `true` if the MOT system goes on properly.
  * 
  */
 bool func::MOT(string input){
 
     cv::VideoCapture cap;
 
-    /* Input is camera. */
+    /* Input is a camera. */
     if (std::isdigit(input[0])) {
 
         int cam_index = std::stoi(input);
@@ -61,12 +60,7 @@ bool func::MOT(string input){
         if(detect -> tick(frame)){
             fd_objs = detect -> getObjects();
 
-            // track -> addBackgrndResp( detect -> getBackgrndResp());
-
-            track -> tick(frame, fd_objs);
-
-            // detect -> addTrackedObjs( track -> getROIs());
-        
+            track -> tick(frame, fd_objs);        
 
             /* Only for testing object detection. */
             for(fdObject& fd_obj: fd_objs){
@@ -75,9 +69,7 @@ bool func::MOT(string input){
             }
         }
         else{
-            // track -> addBackgrndResp( detect -> getBackgrndResp());
             track -> tick(frame);
-            // detect -> addTrackedObjs( track -> getROIs());
         }
 
         cv::imshow(string("Test Set: ") + NAME,frame);        
@@ -111,7 +103,6 @@ float func::IoU(const Rect& bbox_a, const Rect& bbox_b){
 
     int inter_area = ( bbox_a & bbox_b).area();
 
-    /* Believe that it's just a fragment caused by occlusion. */
     float iou = 1.0f * inter_area / (bbox_a.area() + bbox_b.area() - inter_area);
 
     /* Return 1.0 only when one bbox is included in the other. */

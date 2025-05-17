@@ -3,7 +3,7 @@
 /**
  * @file detect.cpp
  * @brief Handles the obejct detection part of the MOT system.
- * @author wantsomechips
+ * @author wantSomeChips
  * @date 2025
  * 
  */
@@ -19,7 +19,8 @@
  * preventing accidental changes.
  * 
  * @param void void.
- * @return the bounding box of Detected object
+ * 
+ * @return the bounding box of the Detected object.
  * 
  */
 Rect fdObject::resultRect(void) const{
@@ -120,7 +121,19 @@ bool objDetect::tick(const Mat& frame){
 }
 
 /**
- * @brief Get background frame difference response, including using a kernel to mitigate fragmentations.
+ * @brief Get background frame difference response, and use a kernel to mitigate fragmentations.
+ * 
+ * Use 2 threshold, `low_threshold` and `high_threshold`, to generate the final response.
+ * 
+ * The final response is based on the low threshold response.
+ * 
+ * A pixel in low threshold response will be kept in the final response, only when it has a 
+ * neighbor in high threshold response. Neighbor means it's in the range of the kernel.
+ * 
+ * Possible fragments within an object will be connected in this way. 
+ * 
+ * We are using a pretty "narrow" kernel, based on the observation that object fragmentation often 
+ * occurs along the horizontal axis, while object adhesion mostly happens along the vertical axis.
  *
  * @param cur_frame     Current input frame.
  * @param final_resp    Background frame difference response. 
@@ -136,7 +149,7 @@ bool objDetect::getBackgrndDiffResp(const Mat& cur_frame, Mat& final_resp){
 
     Mat high_thresh_resp, low_thresh_resp;
 
-    const Size kernel(1,20);
+    const Size kernel(1,9);
     const int low_thresh = 15, high_thresh = 50, max_val = 255;
 
     cv::threshold(backgrnd_diff, low_thresh_resp, low_thresh, max_val, cv::THRESH_BINARY);
@@ -181,11 +194,11 @@ bool objDetect::getBackgrndDiffResp(const Mat& cur_frame, Mat& final_resp){
 /**
  * @brief Update the background model. 
  *
- * @param frame     A single frame image input. 
- * @param obj_rects Bounding boxes of all objects detected or currently tracked. 
- *                  They will be masked out when updateing background model.
+ * @param frame         A single frame image input. 
+ * @param obj_rects     Bounding boxes of all objects detected or currently tracked. 
+ *                      They will be masked out when updateing background model.
  * 
- * @return 
+ * @return Boolean value. Return `true` if the update goes on properly. 
  * 
  */
 bool objDetect::backgrndUpdate(const Mat& frame, const vector<Rect>& obj_rects){
@@ -242,14 +255,11 @@ bool objDetect::backgrndUpdate(const Mat& frame, const vector<Rect>& obj_rects){
 
 }
 
-
-
-
 /**
- * @brief Process frames difference's response and return Rects of detected objects.
+ * @brief Process frames difference's response and return bounding boxes
+ * of detected objects.
  *
  * @param resp      Response of frames difference.
- * @param 
  * 
  * @return Bounding boxes of detected objects.
  * 
@@ -280,7 +290,6 @@ vector<Rect> objDetect::getRects(Mat resp) {
  * preventing accidental changes.
  * 
  * @param void void.
- * @param 
  * 
  * @return Detection result. A set of detected objects.
  * 
