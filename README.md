@@ -79,7 +79,7 @@ Run the Test Program:
 
 ```bash
 cd ./build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 ../bin/main
 ```
@@ -88,7 +88,7 @@ Run with self-define input:
 
 ```bash
 cd ./build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 ../bin/main <input>
 ```
