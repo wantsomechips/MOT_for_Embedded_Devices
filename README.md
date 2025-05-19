@@ -130,10 +130,10 @@ See file `doc\index.html`.
 
 This project includes modified portions of the KCF tracking algorithm from the open-source project:
 
-* **KCFcpp**
-* URL: [https://github.com/joaofaro/KCFcpp](https://github.com/joaofaro/KCFcpp)
-* License: BSD 3-Clause License
-* Copyright (c) 2015, Joao Faro
+- **KCFcpp**
+- URL: [https://github.com/joaofaro/KCFcpp](https://github.com/joaofaro/KCFcpp)
+- License: BSD 3-Clause License
+- Copyright (c) 2015, Joao Faro
 
 Modifications were made for feature calculation and APCE-based tracker reliability assessment.
 
