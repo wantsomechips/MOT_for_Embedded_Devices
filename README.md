@@ -139,7 +139,7 @@ Modifications were made for feature calculation and APCE-based tracker reliabili
 
 ## License
 
-This project is licensed under the **MIT License**.
+This project is licensed under the **Apache 2.0 License**.
 See [LICENSE](./LICENSE) for details.
 
 Third-party code from KCFcpp is licensed under the **BSD 3-Clause License**, see [LICENSE.thirdparty](./kcf/LICENSE.thirdparty) for full text.
